@@ -228,6 +228,19 @@ if (isset($_POST['tombol'])) {
                 background: #e8f5e9 !important; border-color: #1cc88a !important;
                 color: #1cc88a !important; border-radius: 6px;
             }
+            /* ===== CSS DATA USER ===== */
+            #user_search:focus {
+                outline: none; box-shadow: 0 0 0 0.15rem rgba(28,200,138,.25); border-color: #1cc88a;
+            }
+            #user_table_wrapper .dataTables_paginate .paginate_button.current,
+            #user_table_wrapper .dataTables_paginate .paginate_button.current:hover {
+                background: #1cc88a !important; border-color: #1cc88a !important;
+                color: #fff !important; border-radius: 6px;
+            }
+            #user_table_wrapper .dataTables_paginate .paginate_button:hover {
+                background: #e8f5e9 !important; border-color: #1cc88a !important;
+                color: #1cc88a !important; border-radius: 6px;
+            }
             /* ===== CSS CATAT METER ===== */
             #meter_table_wrapper .dataTables_filter input {
                 border-radius: 8px; border: 1px solid #4e73df; padding: 5px 12px;
@@ -397,6 +410,7 @@ if (isset($_POST['tombol'])) {
                     <?php unset($_SESSION['notif']); ?>
                 <?php endif; ?>
 
+                <?php if (empty($page)) : ?>
                 <div class="row" id="summary">
                     <div class="col-xl-3 col-md-6">
                         <div class="card bg-primary text-white mb-4">
@@ -458,6 +472,7 @@ if (isset($_POST['tombol'])) {
                         </div>
                     </div>
                 </div>
+                <?php endif; /* end dashboard only */ ?>
                 <?php
                 // Nilai default dan Mode
                 $user = $pass2 = $nama = $alamat = $kota = $telephone = '';
@@ -560,7 +575,8 @@ if (isset($_POST['tombol'])) {
                     }
                 }
                 ?>
-                <div id="user_add" class="card mb-4" style="display: none;" >
+                <?php if (in_array($page, ['user', 'user_edit', '']) && isset($_GET['p']) && in_array($_GET['p'], ['user','user_edit'])) : ?>
+                <div id="user_add" class="card mb-4" style="display: <?php echo $display_form; ?>;" >
                     <div class="card-header">
                         <i class="fa-solid fa-user-plus me-2 text-success fa-fade"></i> User
                     </div>
@@ -646,11 +662,19 @@ if (isset($_POST['tombol'])) {
                         <i class="fa-solid fa-users me-2 text-success fa-fade"></i> Data User
                     </div>
                     <div class="card-body">
-                        <table id="datatablesSimple">
-                            <thead>
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <button class="btn btn-success btn-sm" id="btn_tambah_user">
+                                <i class="fas fa-user-plus me-1"></i> User
+                            </button>
+                            <div>
+                                <input type="text" id="user_search" class="form-control form-control-sm" placeholder="Search..." style="border-radius:8px; border:1px solid #1cc88a; width:200px;">
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                        <table id="user_table" class="table table-bordered table-striped table-hover align-middle">
+                            <thead class="table-light">
                                 <tr>
                                     <th>Username</th>
-                                    <th>Tanggal</th>
                                     <th>Nama</th>
                                     <th>Alamat</th>
                                     <th>Kota</th>
@@ -661,43 +685,46 @@ if (isset($_POST['tombol'])) {
                                     <th></th>
                                 </tr>
                             </thead>
-
                             <tbody>
                                 <?php
                                 $q=mysqli_query($koneksi,"SELECT username, nama, alamat, kota, telephone, level, tipe, status FROM login ORDER BY level ASC");
-                                while($d=mysqli_fetch_row($q)) {
-                                    $user=$d[0];
-                                    $nama=$d[1];
-                                    $alamat=$d[2];
-                                    $kota=$d[3];
-                                    $telephone=$d[4];
-                                    $level=$d[5];
-                                    $tipe=$d[6];
-                                    $status=$d[7];
+                                while($d=mysqli_fetch_assoc($q)) {
+                                    $user_r   = htmlspecialchars($d['username']);
+                                    $nama_r   = htmlspecialchars($d['nama']);
+                                    $alamat_r = htmlspecialchars($d['alamat']);
+                                    $kota_r   = htmlspecialchars($d['kota']);
+                                    $tele_r   = htmlspecialchars($d['telephone']);
+                                    $level_r  = htmlspecialchars($d['level']);
+                                    $tipe_r   = htmlspecialchars($d['tipe']);
+                                    $status_r = htmlspecialchars($d['status']);
 
                                     echo "<tr>
-                                        <th>$user</th>
-                                        <th>$nama</th>
-                                        <th>$alamat</th>
-                                        <th>$kota</th>
-                                        <th>$telephone</th>
-                                        <th>$level</th>
-                                        <th>$tipe</th>
-                                        <th>$status</th>
-                                        <th>
-                                            <a href='index.php?p=user_edit&user=$user' class='btn btn-success btn-sm'>
+                                        <td>$user_r</td>
+                                        <td>$nama_r</td>
+                                        <td>$alamat_r</td>
+                                        <td>$kota_r</td>
+                                        <td>$tele_r</td>
+                                        <td>$level_r</td>
+                                        <td>$tipe_r</td>
+                                        <td>$status_r</td>
+                                        <td>
+                                            <a href='index.php?p=user_edit&user=$user_r' class='btn btn-success btn-sm'>
                                                 <i class='fas fa-edit'></i>
                                             </a> 
-                                            <a href='index.php?p=user_hapus&user=$user' class='btn btn-danger btn-sm' onclick='return confirm(\"Yakin ingin menghapus data ini?\")'>
+                                            <a href='index.php?p=user_hapus&user=$user_r' class='btn btn-danger btn-sm' onclick='return confirm(\"Yakin ingin menghapus data ini?\")'>
                                                 <i class='fas fa-trash'></i>
                                             </a>
-                                        </th>
+                                        </td>
                                     </tr>";
                                 }
                                 ?>
+                            </tbody>
                         </table>
+                        </div>
+                        <div id="user_table_info" class="text-muted small mt-2"></div>
                     </div>
                 </div>
+                <?php endif; /* end user section */ ?>
 
                 <div class="card mb-4 shadow-sm" id="tarif_list" style="border-top: 4px solid #1cc88a; border-radius: 0.5rem;">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8fff8 0%, #e8f5e9 100%);">
@@ -1126,6 +1153,46 @@ if (isset($_POST['tombol'])) {
 <script src="../js/air.js"></script>
 <script>
 $(document).ready(function() {
+
+    // ─── Init DataTable User ─────────────────────────────────────
+    var userDT = $('#user_table').DataTable({
+        language: {
+            search:     "Cari:",
+            lengthMenu: "Tampilkan _MENU_ data per halaman",
+            info:       "Showing _START_ to _END_ of _TOTAL_ entries",
+            infoEmpty:  "Menampilkan 0 data",
+            emptyTable: "Belum ada data user",
+            zeroRecords:"Tidak ada data yang cocok",
+            paginate: { previous: "&laquo;", next: "&raquo;" }
+        },
+        pageLength: 10,
+        dom: 'tip',   // hanya table, info, pagination — search & length kita buat sendiri
+        columnDefs: [
+            { orderable: false, targets: [8] }
+        ]
+    });
+
+    // Update info teks custom
+    function updateUserInfo() {
+        var info = userDT.page.info();
+        $('#user_table_info').text(
+            'Showing ' + (info.recordsDisplay === 0 ? 0 : info.start + 1) +
+            ' to ' + info.end + ' of ' + info.recordsDisplay + ' entries'
+        );
+    }
+    userDT.on('draw', updateUserInfo);
+    updateUserInfo();
+
+    // Search box custom
+    $('#user_search').on('keyup', function() {
+        userDT.search(this.value).draw();
+    });
+
+    // Tombol tambah user toggle form
+    $('#btn_tambah_user').click(function() {
+        $('#user_add').slideToggle();
+        $('html, body').animate({ scrollTop: $('#user_add').offset().top - 80 }, 400);
+    });
 
     // ─── Init DataTable Tarif ────────────────────────────────────
     $('#tarif_table').DataTable({
