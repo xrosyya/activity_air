@@ -1,5 +1,6 @@
 <?php
 session_start();
+date_default_timezone_set('Asia/Jakarta');
 include '../assets/func.php';
 
 // Cek apakah user sudah login
@@ -46,7 +47,7 @@ if (!empty($page)) {
         "melihat_tagihan_seluruh_warga"                 => ["Melihat Tagihan Seluruh Warga",                     "Melihat Tagihan Seluruh Warga"],
         "melihat_infografis_tagihan_warga"              => ["Melihat Infografis Tagihan Warga",                  "Melihat Infografis Tagihan Warga"],
         "tarif"                                         => ["Manajemen Tarif Air",                               "Manajemen Tarif Air"],
-        "memasukan_datameter_pemakaian_air_warga"       => ["Memasukan Datameter Pemakaian Air Warga",           "Memasukan Datameter Pemakaian Air Warga"],
+        "catat_meter"                                   => ["Catat Meter", "Daftar pencatatan meter air warga"],
         "mengubah_datameter_air_warga_dalam_satu_bulan" => ["Mengubah Datameter Air Warga Dalam Satu Bulan",     "Mengubah Datameter Air Warga Dalam Satu Bulan"],
         "melihat_jumlah_total_pelanggan"                => ["Melihat Jumlah Total Pelanggan",                    "Melihat Jumlah Total Pelanggan"],
         "melihat_jumlah_pemakaian_air_seluruh_warga"    => ["Melihat Jumlah Pemakaian Air Seluruh Warga",        "Melihat Jumlah Pemakaian Air Seluruh Warga"],
@@ -61,6 +62,140 @@ if (!empty($page)) {
         $li = $routes[$page][1];
     }
 }
+
+// HANDLER POST — TARIF
+if (isset($_POST['tombol'])) {
+    $aksi = $_POST['tombol'];
+
+    // --- TAMBAH TARIF ---
+    if ($aksi == 'tarif_add') {
+        $id_t  = mysqli_real_escape_string($koneksi, trim($_POST['yid_tarif']));
+        $tipe  = mysqli_real_escape_string($koneksi, trim($_POST['tipe']));
+        $tarif = mysqli_real_escape_string($koneksi, trim($_POST['tarif']));
+        $stat  = mysqli_real_escape_string($koneksi, trim($_POST['status']));
+
+        // Cek duplikat
+        $cek = mysqli_query($koneksi, "SELECT id_tarif FROM tarif WHERE id_tarif='$id_t'");
+        if (mysqli_num_rows($cek) > 0) {
+            $_SESSION['notif'] = ['type' => 'warning', 'msg' => "ID Tarif <b>$id_t</b> sudah ada!"];
+        } else {
+            mysqli_query($koneksi, "INSERT INTO tarif (id_tarif, tipe, tarif, status) VALUES ('$id_t','$tipe','$tarif','$stat')");
+            if (mysqli_affected_rows($koneksi) > 0) {
+                $_SESSION['notif'] = ['type' => 'success', 'msg' => "Tarif <b>$id_t</b> berhasil ditambahkan."];
+            } else {
+                $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal menambahkan tarif. Periksa koneksi database."];
+            }
+        }
+        header("Location: index.php?p=tarif");
+        exit;
+    }
+
+    // --- EDIT TARIF ---
+    if ($aksi == 'tarif_edit') {
+        $id_t  = mysqli_real_escape_string($koneksi, trim($_POST['yid_tarif']));
+        $tipe  = mysqli_real_escape_string($koneksi, trim($_POST['tipe']));
+        $tarif = mysqli_real_escape_string($koneksi, trim($_POST['tarif']));
+        $stat  = mysqli_real_escape_string($koneksi, trim($_POST['status']));
+
+        mysqli_query($koneksi, "UPDATE tarif SET tipe='$tipe', tarif='$tarif', status='$stat' WHERE id_tarif='$id_t'");
+        if (mysqli_affected_rows($koneksi) >= 0) {
+            $_SESSION['notif'] = ['type' => 'success', 'msg' => "Tarif <b>$id_t</b> berhasil diperbarui."];
+        } else {
+            $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal memperbarui tarif."];
+        }
+        header("Location: index.php?p=tarif");
+        exit;
+    }
+
+    // --- HAPUS TARIF ---
+    if ($aksi == 'tarif_hapus') {
+        $id_t = mysqli_real_escape_string($koneksi, trim($_POST['id_tarif']));
+        mysqli_query($koneksi, "DELETE FROM tarif WHERE id_tarif='$id_t'");
+        if (mysqli_affected_rows($koneksi) > 0) {
+            $_SESSION['notif'] = ['type' => 'success', 'msg' => "Tarif <b>$id_t</b> berhasil dihapus."];
+        } else {
+            $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal menghapus tarif."];
+        }
+        header("Location: index.php?p=tarif");
+        exit;
+    }
+
+    // --- TAMBAH CATAT METER ---
+    if ($aksi == 'meter_add') {
+        $id_pel  = mysqli_real_escape_string($koneksi, trim($_POST['id_pelanggan']));
+        $tgl     = mysqli_real_escape_string($koneksi, trim($_POST['tgl']));
+        $waktu   = mysqli_real_escape_string($koneksi, trim($_POST['waktu']));
+        $m_awal  = mysqli_real_escape_string($koneksi, trim($_POST['meter_awal']));
+        $m_akhir = mysqli_real_escape_string($koneksi, trim($_POST['meter_akhir']));
+        $pakai   = $m_akhir - $m_awal;
+
+        // Ambil tarif aktif pelanggan
+        $q_tarif = mysqli_query($koneksi, "SELECT t.tarif, t.id_tarif FROM tarif t 
+                                            JOIN login l ON l.kd_tarif = t.id_tarif 
+                                            WHERE l.username = '$id_pel' AND t.status='AKTIF' LIMIT 1");
+        $d_tarif  = mysqli_fetch_assoc($q_tarif);
+        $kd_tarif = $d_tarif['id_tarif'] ?? '';
+        $tagihan  = $pakai * ($d_tarif['tarif'] ?? 0);
+
+        // Cek apakah sudah dicatat pada tanggal yang sama
+        $cek = mysqli_query($koneksi, "SELECT no FROM pemakaian WHERE username='$id_pel' AND tgl='$tgl'");
+        if (mysqli_num_rows($cek) > 0) {
+            $_SESSION['notif'] = ['type' => 'warning', 'msg' => "Pelanggan sudah dicatat pada tanggal tersebut."];
+        } else {
+            mysqli_query($koneksi, "INSERT INTO pemakaian (username, meter_awal, meter_akhir, pemakaian, tgl, waktu, kd_tarif, tagihan, status) 
+                                    VALUES ('$id_pel', '$m_awal', '$m_akhir', '$pakai', '$tgl', '$waktu', '$kd_tarif', '$tagihan', 'BELUM BAYAR')");
+            if (mysqli_affected_rows($koneksi) > 0) {
+                $_SESSION['notif'] = ['type' => 'success', 'msg' => "Data meter berhasil disimpan."];
+            } else {
+                $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal menyimpan data: " . mysqli_error($koneksi)];
+            }
+        }
+        header("Location: index.php?p=catat_meter");
+        exit;
+    }
+
+    // --- EDIT CATAT METER ---
+    if ($aksi == 'meter_edit') {
+        $id_rec  = mysqli_real_escape_string($koneksi, trim($_POST['id_meter']));
+        $id_pel  = mysqli_real_escape_string($koneksi, trim($_POST['id_pelanggan']));
+        $tgl     = mysqli_real_escape_string($koneksi, trim($_POST['tgl']));
+        $waktu   = mysqli_real_escape_string($koneksi, trim($_POST['waktu']));
+        $m_awal  = mysqli_real_escape_string($koneksi, trim($_POST['meter_awal']));
+        $m_akhir = mysqli_real_escape_string($koneksi, trim($_POST['meter_akhir']));
+        $pakai   = $m_akhir - $m_awal;
+
+        $q_tarif = mysqli_query($koneksi, "SELECT t.tarif, t.id_tarif FROM tarif t 
+                                            JOIN login l ON l.kd_tarif = t.id_tarif 
+                                            WHERE l.username = '$id_pel' AND t.status='AKTIF' LIMIT 1");
+        $d_tarif  = mysqli_fetch_assoc($q_tarif);
+        $kd_tarif = $d_tarif['id_tarif'] ?? '';
+        $tagihan  = $pakai * ($d_tarif['tarif'] ?? 0);
+
+        mysqli_query($koneksi, "UPDATE pemakaian SET username='$id_pel', meter_awal='$m_awal', meter_akhir='$m_akhir', 
+                                pemakaian='$pakai', tgl='$tgl', waktu='$waktu', kd_tarif='$kd_tarif', tagihan='$tagihan' 
+                                WHERE no='$id_rec'");
+        if (mysqli_affected_rows($koneksi) >= 0) {
+            $_SESSION['notif'] = ['type' => 'success', 'msg' => "Data meter berhasil diperbarui."];
+        } else {
+            $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal memperbarui: " . mysqli_error($koneksi)];
+        }
+        header("Location: index.php?p=catat_meter");
+        exit;
+    }
+
+    // --- HAPUS CATAT METER ---
+    if ($aksi == 'meter_hapus') {
+        $id_rec = mysqli_real_escape_string($koneksi, trim($_POST['id_meter']));
+        mysqli_query($koneksi, "DELETE FROM pemakaian WHERE no='$id_rec'");
+        if (mysqli_affected_rows($koneksi) > 0) {
+            $_SESSION['notif'] = ['type' => 'success', 'msg' => "Data meter berhasil dihapus."];
+        } else {
+            $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal menghapus data meter: " . mysqli_error($koneksi)];
+        }
+        header("Location: index.php?p=catat_meter");
+        exit;
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -73,12 +208,49 @@ if (!empty($page)) {
         <link href="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/style.min.css" rel="stylesheet" />
         <link href="../css/styles.css" rel="stylesheet" />
         <script src="https://use.fontawesome.com/releases/v6.3.0/js/all.js" crossorigin="anonymous"></script>
-        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
-        <script src="../js/air.js"></script>
+        <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css"/>
+        <style>
+            #tarif_table_wrapper .dataTables_filter input {
+                border-radius: 8px; border: 1px solid #1cc88a; padding: 5px 12px;
+            }
+            #tarif_table_wrapper .dataTables_filter input:focus {
+                outline: none; box-shadow: 0 0 0 0.15rem rgba(28,200,138,.25); border-color: #1cc88a;
+            }
+            #tarif_table_wrapper .dataTables_length select {
+                border-radius: 8px; border: 1px solid #1cc88a; padding: 4px 8px;
+            }
+            #tarif_table_wrapper .dataTables_paginate .paginate_button.current,
+            #tarif_table_wrapper .dataTables_paginate .paginate_button.current:hover {
+                background: #1cc88a !important; border-color: #1cc88a !important;
+                color: #fff !important; border-radius: 6px;
+            }
+            #tarif_table_wrapper .dataTables_paginate .paginate_button:hover {
+                background: #e8f5e9 !important; border-color: #1cc88a !important;
+                color: #1cc88a !important; border-radius: 6px;
+            }
+            /* ===== CSS CATAT METER ===== */
+            #meter_table_wrapper .dataTables_filter input {
+                border-radius: 8px; border: 1px solid #4e73df; padding: 5px 12px;
+            }
+            #meter_table_wrapper .dataTables_filter input:focus {
+                outline: none; box-shadow: 0 0 0 0.15rem rgba(78,115,223,.25); border-color: #4e73df;
+            }
+            #meter_table_wrapper .dataTables_length select {
+                border-radius: 8px; border: 1px solid #4e73df; padding: 4px 8px;
+            }
+            #meter_table_wrapper .dataTables_paginate .paginate_button.current,
+            #meter_table_wrapper .dataTables_paginate .paginate_button.current:hover {
+                background: #4e73df !important; border-color: #4e73df !important;
+                color: #fff !important; border-radius: 6px;
+            }
+            #meter_table_wrapper .dataTables_paginate .paginate_button:hover {
+                background: #eaecf4 !important; border-color: #4e73df !important;
+                color: #4e73df !important; border-radius: 6px;
+            }
+        </style>
     </head>
     <body class="sb-nav-fixed">
 
-<!-- TOP NAVBAR -->
 <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
     <a class="navbar-brand ps-3" href="index.php">AirSystem</a>
     <button class="btn btn-link btn-sm order-1 order-lg-0 me-4 me-lg-0" id="sidebarToggle" href="#!">
@@ -111,14 +283,12 @@ if (!empty($page)) {
 
 <div id="layoutSidenav">
 
-    <!-- SIDEBAR -->
     <div id="layoutSidenav_nav">
         <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
             <div class="sb-sidenav-menu">
                 <div class="nav">
                     <div class="sb-sidenav-menu-heading">Core</div>
 
-                    <!-- Dashboard (semua role) -->
                     <a class="nav-link" href="index.php">
                         <div class="sb-nav-link-icon">
                             <i class="fas fa-tachometer-alt fa-spin text-success"></i>
@@ -146,26 +316,26 @@ if (!empty($page)) {
 
                     <?php elseif ($level === "bendahara") : ?>
                         <a class="nav-link" href="index.php?p=transaksi_pembayaran">
-                            <div class="sb-nav-link-icon"><i class="fas fa-money-bill text-success"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-money-bill-wave text-success"></i></div>
                             Transaksi Pembayaran 
                         </a>
                         <a class="nav-link" href="index.php?p=tarif">
-                            <div class="sb-nav-link-icon"><i class="fas fa-edit text-warning"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-tags text-warning"></i></div>
                             Manajemen Tarif
                         </a>
                         <a class="nav-link" href="index.php?p=lihat_komplain">
-                            <div class="sb-nav-link-icon"><i class="fas fa-edit text-warning"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-comment-dots text-danger"></i></div>
                             Lihat Komplain
                         </a>
                         <a class="nav-link" href="index.php?p=lihat_data_pemakaian">
-                            <div class="sb-nav-link-icon"><i class="fas fa-edit text-warning"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-tint text-info"></i></div>
                             Lihat Data Pemakaian
                         </a>
 
                     <?php elseif ($level === "petugas") : ?>
-                        <a class="nav-link" href="index.php?p=memasukan_datameter_pemakaian_air_warga">
+                        <a class="nav-link" href="index.php?p=catat_meter">
                             <div class="sb-nav-link-icon"><i class="fas fa-plus-circle text-success"></i></div>
-                            Memasukan Datameter Pemakaian Air Warga
+                            Catat Meter
                         </a>
                         <a class="nav-link" href="index.php?p=mengubah_datameter_air_warga_dalam_satu_bulan">
                             <div class="sb-nav-link-icon"><i class="fas fa-edit text-warning"></i></div>
@@ -211,16 +381,22 @@ if (!empty($page)) {
         </nav>
     </div>
 
-    <!-- MAIN CONTENT -->
     <div id="layoutSidenav_content">
         <main>
             <div class="container-fluid px-4">
                 <h1 class="mt-4"><?php echo htmlspecialchars($h1); ?></h1>
                 <ol class="breadcrumb mb-4">
-                    <li class="breadcrumb-item active">Menu untuk CRUD User</li>
+                    <li class="breadcrumb-item active"><?php echo htmlspecialchars($li); ?></li>
                 </ol>
 
-                <!-- Summary Cards -->
+                <?php if (isset($_SESSION['notif'])): ?>
+                    <div class="alert alert-<?php echo $_SESSION['notif']['type']; ?> alert-dismissible fade show" role="alert">
+                        <i class="fas fa-info-circle me-1"></i> <?php echo $_SESSION['notif']['msg']; ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                    <?php unset($_SESSION['notif']); ?>
+                <?php endif; ?>
+
                 <div class="row" id="summary">
                     <div class="col-xl-3 col-md-6">
                         <div class="card bg-primary text-white mb-4">
@@ -260,7 +436,6 @@ if (!empty($page)) {
                     </div>
                 </div>
 
-                <!-- Charts -->
                 <div class="row" id="chart">
                     <div class="col-xl-6">
                         <div class="card mb-4">
@@ -331,7 +506,7 @@ if (!empty($page)) {
                         $pass = password_hash($pass2, PASSWORD_DEFAULT);
                         $qc = mysqli_query($koneksi, "SELECT username FROM login WHERE username='$user_input'");
                         if (mysqli_num_rows($qc) == 0) {
-                            mysqli_query($koneksi, "INSERT INTO login (username, password, nama, alamat, kota, telephone, level, tipe, status) VALUE ('$user_input', '$pass', '$nama_in', '$alamat_in', '$kota_in', '$tele_in', '$level_in', '$tipe_in', '$status_in')");
+                            mysqli_query($koneksi, "INSERT INTO login (username, password, nama, alamat, kota, telephone, level, tipe, status, tgl) VALUE ('$user_input', '$pass', '$nama_in', '$alamat_in', '$kota_in', '$tele_in', '$level_in', '$tipe_in', '$status_in', NOW())");
                             if (mysqli_affected_rows($koneksi) > 0) {
                                 echo "<div class='alert alert-success alert-dismissible fade show'><button type=button class=btn-close data-bs-dismiss=alert></button><strong>Data</strong> berhasil dimasukkan...</div>";
                             } else {
@@ -466,7 +641,6 @@ if (!empty($page)) {
                             </form> 
                     </div>
                 </div>
-                <!-- Data Table -->
                 <div class="card mb-4" id="user_list">
                     <div class="card-header">
                         <i class="fa-solid fa-users me-2 text-success fa-fade"></i> Data User
@@ -476,6 +650,7 @@ if (!empty($page)) {
                             <thead>
                                 <tr>
                                     <th>Username</th>
+                                    <th>Tanggal</th>
                                     <th>Nama</th>
                                     <th>Alamat</th>
                                     <th>Kota</th>
@@ -523,164 +698,125 @@ if (!empty($page)) {
                         </table>
                     </div>
                 </div>
-            </div>
-        </main>
-            <div id="tarif_list" class="card mb-4 mt-4" style="display: none; border-left: 4px solid #4e73df; box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,0.15)!important;">
-                    <div class="card-header bg-white py-3 d-flex flex-row align-items-center justify-content-between">
-                        <h6 class="m-0 font-weight-bold text-primary">
-                            <i class="fas fa-money-bill-wave me-1"></i> Data Tarif Air
-                        </h6>
+
+                <div class="card mb-4 shadow-sm" id="tarif_list" style="border-top: 4px solid #1cc88a; border-radius: 0.5rem;">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8fff8 0%, #e8f5e9 100%);">
+                        <div class="d-flex align-items-center gap-2">
+                            <div style="background:#1cc88a;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                                <i class="fas fa-tags text-white"></i>
+                            </div>
+                            <div>
+                                <h6 class="m-0 fw-bold text-success">Data Tarif Air</h6>
+                                <small class="text-muted">Daftar seluruh tarif yang tersedia</small>
+                            </div>
+                        </div>
+                        <button type="button" id="btn_tambah_tarif" class="btn btn-success d-flex align-items-center gap-2" style="border-radius:8px; padding:8px 18px; font-weight:600;">
+                            <i class="fas fa-plus"></i> Tambah Tarif
+                        </button>
                     </div>
                     <div class="card-body">
-                        <div class="table-responsive">
-                            <table id="tabelTarifBaru" class="table table-striped table-bordered table-hover w-100" cellspacing="0">
-                                <thead class="bg-primary text-white text-center">
-                                    <tr>
-                                        <th class="align-middle">ID Tarif</th>
-                                        <th class="align-middle">Tipe Tarif</th>
-                                        <th class="align-middle">Tarif (Rp)</th>
-                                        <th class="align-middle">Status</th>
-                                        <th class="align-middle">Aksi</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php
-                                    $q_tarif = mysqli_query($koneksi, "SELECT * FROM tarif");
-                                    
-                                    if($q_tarif && mysqli_num_rows($q_tarif) > 0) {
-                                        while ($d_tarif = mysqli_fetch_array($q_tarif)) {
-                                            $tarif_formatted = number_format($d_tarif['tarif'], 0, ',', '.');
-                                            $badge_status = ($d_tarif['status'] == 'aktif') ? 'badge-success' : 'badge-danger';
-                                            
-                                            echo "<tr>
-                                                <td class='align-middle text-center'>{$d_tarif['id_tarif']}</td>
-                                                <td class='align-middle'>{$d_tarif['tipe']}</td>
-                                                <td class='align-middle text-end font-weight-bold text-dark'>{$tarif_formatted}</td>
-                                                <td class='align-middle text-center'>
-                                                    <span class='badge {$badge_status} text-uppercase' style='font-size: 80%; padding: .4em .6em;'>{$d_tarif['status']}</span>
-                                                </td>
-                                                <td class='align-middle text-center'>
-                                                    <div class='btn-group' role='group'>
-                                                        <a href='index.php?p=tarif_edit&id={$d_tarif['id_tarif']}' class='btn btn-outline-success btn-sm me-1' title='Ubah'>
-                                                            <i class='fas fa-edit'></i>
-                                                        </a>
-                                                        <a href='index.php?p=tarif_hapus&id={$d_tarif['id_tarif']}' class='btn btn-outline-danger btn-sm' title='Hapus' onclick=\"return confirm('Yakin ingin menghapus tarif ini?');\">
-                                                            <i class='fas fa-trash-alt'></i>
-                                                        </a>
-                                                    </div>
-                                                </td>
-                                            </tr>";
-                                        }
-                                    }
-                                    ?>
-                                </tbody>
-                            </table>
-                        </div>
+                        <table id="tarif_table" class="table table-hover align-middle w-100" style="font-size:0.95rem;">
+                            <thead style="background:#f1f9f1;">
+                                <tr>
+                                    <th class="text-secondary fw-semibold" style="width:60px;">No</th>
+                                    <th class="text-secondary fw-semibold">ID Tarif</th>
+                                    <th class="text-secondary fw-semibold">Tipe Tarif</th>
+                                    <th class="text-secondary fw-semibold">Tarif (Rp)</th>
+                                    <th class="text-secondary fw-semibold text-center">Status</th>
+                                    <th class="text-secondary fw-semibold text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $no = 1;
+                                $qt = mysqli_query($koneksi, "SELECT * FROM tarif ORDER BY id_tarif ASC");
+                                while ($dt = mysqli_fetch_array($qt)) {
+                                    $id_t   = htmlspecialchars($dt['id_tarif']);
+                                    $tipe   = htmlspecialchars($dt['tipe']);
+                                    $harga  = $dt['tarif'];
+                                    $stat   = htmlspecialchars($dt['status']);
+                                    $badge  = strtolower($stat) == 'aktif'
+                                        ? "<span class='badge rounded-pill px-3 py-2' style='background:#d4edda;color:#155724;font-size:0.8rem;'><i class='fas fa-circle me-1' style='font-size:0.5rem;'></i>AKTIF</span>"
+                                        : "<span class='badge rounded-pill px-3 py-2' style='background:#f8d7da;color:#721c24;font-size:0.8rem;'><i class='fas fa-circle me-1' style='font-size:0.5rem;'></i>TIDAK AKTIF</span>";
+
+                                    echo "<tr>
+                                            <td class='text-muted'>$no</td>
+                                            <td><span class='fw-bold text-dark'>$id_t</span></td>
+                                            <td>$tipe</td>
+                                            <td class='fw-semibold text-success'>Rp " . number_format($harga, 0, ',', '.') . "</td>
+                                            <td class='text-center'>$badge</td>
+                                            <td class='text-center'>
+                                                <a href='index.php?p=tarif_edit&id=$id_t' class='btn btn-sm btn-warning me-1' style='min-width:75px;'>
+                                                    <i class='fas fa-edit me-1'></i>Ubah
+                                                </a>
+                                                <button type='button' class='btn btn-sm btn-danger' style='min-width:75px;'
+                                                    data-bs-toggle='modal' data-bs-target='#myModal' data-id_tarif='$id_t'>
+                                                    <i class='fas fa-trash me-1'></i>Hapus
+                                                </button>
+                                            </td>
+                                        </tr>";
+                                    $no++;
+                                }
+                                ?>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                <style>
-                    /* CSS yang mengembalikan proporsi asli agar tabel tidak terlalu sesak */
-                    #tabelTarifBaru thead th {
-                        font-weight: 600;
-                        font-size: 0.9rem;
-                        text-transform: uppercase;
-                        letter-spacing: 0.05rem;
-                        padding: 12px 10px;
-                        white-space: nowrap;
-                    }
-                    #tabelTarifBaru tbody td {
-                        font-size: 0.95rem;
-                        color: #5a5c69;
-                        padding: 10px;
-                    }
-                    /* Styling Search & Tombol di atas tabel menyebar penuh */
-                    .datatable-top {
-                        padding: 5px 0 15px 0;
-                        display: flex;
-                        align-items: center;
-                        justify-content: space-between;
-                        flex-wrap: wrap;
-                        gap: 10px;
-                    }
-                    .datatable-search {
-                        order: 2;
-                    }
-                    .datatable-top .btn-success {
-                        order: 1;
-                    }
-                </style>
-
-                <script>
-                    window.addEventListener('DOMContentLoaded', event => {
-                        const datatableTarif = document.getElementById('tabelTarifBaru');
-                        if (datatableTarif) {
-                            new simpleDatatables.DataTable(datatableTarif, {
-                                labels: {
-                                    placeholder: "Cari tarif...",
-                                    noRows: "Tidak ada data tarif",
-                                    info: "Menampilkan {start}-{end} dari {rows} data",
-                                    perPage: "entri per halaman"
-                                }
-                            });
-                        }
-                    });
-                </script>
-
-                <div id="tarif_add" class="card mb-4 mt-4 mx-auto" style="display: none; border-top: 4px solid #1cc88a; box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,0.15)!important; max-width: 800px;">
+                <div id="tarif_add" class="card mb-4" style="display: none; border-top: 4px solid #1cc88a; box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,0.15);">
                     <div class="card-header bg-white py-3">
-                        <h6 class="m-0 font-weight-bold text-success">
-                            <i class="fas fa-plus-circle me-1"></i> Form Input Data Tarif
-                        </h6>
+                        <h5 class="m-0 fw-bold text-success">
+                            <i class="fas fa-plus-circle me-2"></i> Form Input Data Tarif
+                        </h5>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body px-4 py-4">
                         <form id="tarif_form" method="POST" action="index.php">
-                            <div class="table-responsive">
-                                <table class="table table-bordered align-middle">
-                                    <tr class="bg-light">
-                                        <th width="30%" class="ps-3">ID Tarif</th>
-                                        <td>
-                                            <input type="text" class="form-control" name="yid_tarif" placeholder="Masukkan ID (Contoh: TRF001)" required>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <th class="ps-3">Tipe Tarif</th>
-                                        <td>
-                                            <input type="text" class="form-control" name="tipe" placeholder="Contoh: Rumah Tangga / Industri" required>
-                                        </td>
-                                    </tr>
-                                    <tr class="bg-light">
-                                        <th class="ps-3">Besaran Tarif</th>
-                                        <td>
-                                            <div class="input-group">
-                                                <span class="input-group-text bg-white">Rp</span>
-                                                <input type="number" class="form-control" name="tarif" placeholder="0" required>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <th class="ps-3">Status Aktivasi</th>
-                                        <td>
-                                            <div class="d-flex gap-3 mt-1">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="status" id="st_aktif" value="aktif" checked required>
-                                                    <label class="form-check-label text-success font-weight-bold" for="st_aktif">Aktif</label>
-                                                </div>
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="radio" name="status" id="st_non" value="tidak aktif" required>
-                                                    <label class="form-check-label text-danger font-weight-bold" for="st_non">Tidak Aktif</label>
-                                                </div>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </table>
+                            <div class="row mb-3 align-items-center">
+                                <label class="col-md-3 col-form-label fw-bold fs-6">ID Tarif</label>
+                                <div class="col-md-9">
+                                    <input type="text" class="form-control form-control-lg" name="yid_tarif" placeholder="Masukkan ID (Contoh: TRF001)" required>
+                                </div>
                             </div>
-                            
-                            <div class="text-end mt-3 pe-2">
-                                <a href="index.php?p=tarif" class="btn btn-secondary btn-sm px-3">
+                            <div class="row mb-3 align-items-center">
+                                <label class="col-md-3 col-form-label fw-bold fs-6">Tipe Tarif</label>
+                                <div class="col-md-9">
+                                    <input type="text" class="form-control form-control-lg" name="tipe" placeholder="Contoh: Rumah Tangga / Industri / Kos" required>
+                                </div>
+                            </div>
+                            <div class="row mb-3 align-items-center">
+                                <label class="col-md-3 col-form-label fw-bold fs-6">Besaran Tarif</label>
+                                <div class="col-md-9">
+                                    <div class="input-group input-group-lg">
+                                        <span class="input-group-text bg-white fw-bold">Rp</span>
+                                        <input type="number" class="form-control" name="tarif" placeholder="0" min="0" required>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="row mb-4 align-items-center">
+                                <label class="col-md-3 col-form-label fw-bold fs-6">Status Aktivasi</label>
+                                <div class="col-md-9">
+                                    <div class="d-flex gap-4 mt-1">
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="status" id="st_aktif" value="aktif" checked required>
+                                            <label class="form-check-label fw-bold text-success fs-6" for="st_aktif">
+                                                <i class="fas fa-check-circle me-1"></i> Aktif
+                                            </label>
+                                        </div>
+                                        <div class="form-check form-check-inline">
+                                            <input class="form-check-input" type="radio" name="status" id="st_non" value="tidak aktif" required>
+                                            <label class="form-check-label fw-bold text-danger fs-6" for="st_non">
+                                                <i class="fas fa-times-circle me-1"></i> Tidak Aktif
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <hr>
+                            <div class="d-flex justify-content-end gap-2 mt-3">
+                                <a href="index.php?p=tarif" class="btn btn-secondary btn-lg px-4">
                                     <i class="fas fa-arrow-left me-1"></i> Batal
                                 </a>
-                                <button type="submit" class="btn btn-success btn-sm px-4 ms-2" name="tombol" value="tarif_add">
+                                <button type="submit" class="btn btn-success btn-lg px-5" name="tombol" value="tarif_add">
                                     <i class="fas fa-save me-1"></i> Simpan Data
                                 </button>
                             </div>
@@ -688,10 +824,284 @@ if (!empty($page)) {
                     </div>
                 </div>
 
+                <?php 
+                if ($page == "tarif_edit" && isset($_GET['id'])) { 
+                    $id_edit  = mysqli_real_escape_string($koneksi, $_GET['id']);
+                    $q_edit_t = mysqli_query($koneksi, "SELECT * FROM tarif WHERE id_tarif='$id_edit'");
+                    $d_edit_t = mysqli_fetch_array($q_edit_t);
+                    if ($d_edit_t) { ?>
+                    <script>
+                    $(document).ready(function(){
+                        $("#tarif_form input[name='yid_tarif']").val("<?php echo htmlspecialchars($d_edit_t['id_tarif']); ?>");
+                        $("#tarif_form input[name='tipe']").val("<?php echo htmlspecialchars($d_edit_t['tipe']); ?>");
+                        $("#tarif_form input[name='tarif']").val("<?php echo htmlspecialchars($d_edit_t['tarif']); ?>");
+                        var status = "<?php echo strtolower($d_edit_t['status']); ?>";
+                        $("#tarif_form input[name='status'][value='" + status + "']").prop("checked", true);
+                    });
+                    </script>
+                    <?php } } ?>
+
+                <div class="card mb-4 shadow-sm" id="catat_meter_list" style="display:none; border-top: 4px solid #4e73df; border-radius: 0.5rem;">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8f9ff 0%, #eaecf4 100%);">
+                        <div class="d-flex align-items-center gap-2">
+                            <div style="background:#4e73df;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                                <i class="fas fa-tachometer-alt text-white"></i>
+                            </div>
+                            <div>
+                                <h6 class="m-0 fw-bold text-primary">Data Catat Meter</h6>
+                                <small class="text-muted">Daftar pencatatan meter air warga</small>
+                            </div>
+                        </div>
+                        <button type="button" id="btn_tambah_meter" class="btn btn-primary d-flex align-items-center gap-2" style="border-radius:8px; padding:8px 18px; font-weight:600;">
+                            <i class="fas fa-plus"></i> Catat Meter
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <?php
+                        // Notifikasi session untuk catat meter
+                        if (isset($_SESSION['notif'])) {
+                            $n = $_SESSION['notif'];
+                            echo "<div class='alert alert-{$n['type']} alert-dismissible fade show'>
+                                    <button type='button' class='btn-close' data-bs-dismiss='alert'></button>
+                                    {$n['msg']}
+                                  </div>";
+                            unset($_SESSION['notif']);
+                        }
+                        ?>
+                        <table id="meter_table" class="table table-hover align-middle w-100" style="font-size:0.95rem;">
+                            <thead style="background:#eaecf4;">
+                                <tr>
+                                    <th class="text-secondary fw-semibold" style="width:50px;">No</th>
+                                    <th class="text-secondary fw-semibold">Nama</th>
+                                    <th class="text-secondary fw-semibold text-center">Tanggal & Waktu</th>
+                                    <th class="text-secondary fw-semibold text-center">Meter Awal</th>
+                                    <th class="text-secondary fw-semibold text-center">Meter Akhir</th>
+                                    <th class="text-secondary fw-semibold text-center">Pemakaian (m³)</th>
+                                    <th class="text-secondary fw-semibold text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $no_m = 1;
+                                $qm = mysqli_query($koneksi, "
+                                    SELECT p.*, l.nama 
+                                    FROM pemakaian p 
+                                    LEFT JOIN login l ON p.username = l.username 
+                                    ORDER BY p.tgl DESC, p.username ASC
+                                ");
+                                if (!$qm) {
+                                    echo "<tr><td colspan='9' class='text-center text-danger py-3'>Gagal: " . mysqli_error($koneksi) . "</td></tr>";
+                                }
+                                while ($dm = mysqli_fetch_assoc($qm)) {
+                                $id_r    = $dm['no'];
+                                $id_p    = htmlspecialchars($dm['username']);
+                                $nama_p  = htmlspecialchars($dm['nama'] ?? $dm['username']);
+                                $m_awal  = $dm['meter_awal'];
+                                $m_akhir = $dm['meter_akhir'];
+                                $pakai   = $dm['pemakaian'];
+                                // Format tanggal: Y-m-d -> d-m-Y
+                                $tgl_raw   = $dm['tgl'] ?? '';
+                                $tgl_fmt   = $tgl_raw ? date('d-m-Y', strtotime($tgl_raw)) : '-';
+
+                                // Ambil hanya HH:MM:SS dari kolom waktu (potong jika ada karakter lain)
+                                $waktu_raw = $dm['waktu'] ?? '';
+                                preg_match('/\d{2}:\d{2}(:\d{2})?/', $waktu_raw, $wm);
+                                $waktu_fmt = isset($wm[0]) ? $wm[0] : '-';
+
+                                $tgl_waktu = $tgl_fmt . ' ' . $waktu_fmt;
+
+                                echo "<tr>
+                                    <td class='text-muted'>$no_m</td>
+                                    <td>$nama_p</td>
+                                    <td class='text-center'>$tgl_waktu</td>
+                                    <td class='text-center'>$m_awal</td>
+                                    <td class='text-center'>$m_akhir</td>
+                                    <td class='text-center fw-semibold text-primary'>$pakai m³</td>
+                                    <td class='text-center'>
+                                        <a href='index.php?p=meter_edit&id=$id_r' class='btn btn-sm btn-warning me-1' style='min-width:70px;'>
+                                            <i class='fas fa-edit me-1'></i>Ubah
+                                        </a>
+                                        <button type='button' class='btn btn-sm btn-danger' style='min-width:70px;'
+                                            data-bs-toggle='modal' data-bs-target='#myModalMeter'
+                                            data-id_meter='$id_r' data-id_pelanggan='$id_p'>
+                                            <i class='fas fa-trash me-1'></i>Hapus
+                                        </button>
+                                    </td>
+                                </tr>";
+                                $no_m++;
+                            }
+                                
+                                ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="catat_meter_add" class="card mb-4" style="display: none; border-top: 4px solid #4e73df; box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,0.15);">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="m-0 fw-bold text-primary">
+                            <i class="fas fa-plus-circle me-2"></i> Form Catat Meter Air
+                        </h5>
+                    </div>
+                    <div class="card-body px-4 py-4">
+                        <form id="meter_form" method="POST" action="index.php">
+                            <input type="hidden" name="id_meter" id="form_id_meter" value="">
+
+                            <div class="row mb-3 align-items-center">
+                                <label class="col-md-3 col-form-label fw-bold fs-6">ID Pelanggan</label>
+                                <div class="col-md-9">
+                                    <!-- Dropdown: tampil saat mode tambah -->
+                                    <select class="form-select form-select-lg" name="id_pelanggan" id="sel_id_pelanggan" required>
+                                        <option value="">-- Pilih Pelanggan --</option>
+                                        <?php
+                                        $qwarga = mysqli_query($koneksi, "SELECT username, nama FROM login WHERE LOWER(level)='warga' AND UPPER(status)='AKTIF' ORDER BY nama ASC");
+                                        while ($dw = mysqli_fetch_assoc($qwarga)) {
+                                            $uname  = htmlspecialchars($dw['username']);
+                                            $nwarga = htmlspecialchars($dw['nama']);
+                                            echo "<option value='$uname'>$uname – $nwarga</option>";
+                                        }
+                                        ?>
+                                    </select>
+                                    <!-- Tampil saat mode edit: teks terkunci + hidden input -->
+                                    <div id="pelanggan_locked" style="display:none;">
+                                        <input type="text" class="form-control form-control-lg bg-light text-muted" id="txt_pelanggan_display" readonly>
+                                        <input type="hidden" name="id_pelanggan" id="hid_id_pelanggan">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3 align-items-center">
+                                <label class="col-md-3 col-form-label fw-bold fs-6">Tanggal</label>
+                                <div class="col-md-9">
+                                    <input type="date" class="form-control form-control-lg" name="tgl" id="inp_tgl"
+                                        value="<?php echo date('Y-m-d'); ?>" required>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3 align-items-center">
+                                <label class="col-md-3 col-form-label fw-bold fs-6">Waktu</label>
+                                <div class="col-md-9">
+                                    <input type="time" class="form-control form-control-lg" name="waktu" id="inp_waktu"
+                                        value="<?php echo date('H:i'); ?>" required>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3 align-items-center">
+                                <label class="col-md-3 col-form-label fw-bold fs-6">Meter Awal (m³)</label>
+                                <div class="col-md-9">
+                                    <input type="number" class="form-control form-control-lg" name="meter_awal" id="inp_meter_awal"
+                                        placeholder="Angka meter awal" min="0" step="0.01" required>
+                                </div>
+                            </div>
+
+                            <div class="row mb-3 align-items-center">
+                                <label class="col-md-3 col-form-label fw-bold fs-6">Meter Akhir (m³)</label>
+                                <div class="col-md-9">
+                                    <input type="number" class="form-control form-control-lg" name="meter_akhir" id="inp_meter_akhir"
+                                        placeholder="Angka meter akhir" min="0" step="0.01" required>
+                                </div>
+                            </div>
+
+                            <hr>
+                            <div class="d-flex justify-content-end gap-2 mt-3">
+                                <a href="index.php?p=catat_meter" class="btn btn-secondary btn-lg px-4">
+                                    <i class="fas fa-arrow-left me-1"></i> Batal
+                                </a>
+                                <button type="submit" class="btn btn-primary btn-lg px-5" name="tombol" id="btn_meter_submit" value="meter_add">
+                                    <i class="fas fa-save me-1"></i> Simpan Data
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <?php
+                // Mode Edit: isi form dari data DB
+                if ($page == "meter_edit" && isset($_GET['id'])) {
+                    $id_edit_m = (int) $_GET['id'];
+                    $q_edit_m  = mysqli_query($koneksi, "SELECT p.*, l.nama FROM pemakaian p LEFT JOIN login l ON l.username = p.username WHERE p.no='$id_edit_m'");
+                    $d_edit_m  = mysqli_fetch_assoc($q_edit_m);
+                    if ($d_edit_m) { ?>
+                    <script>
+                    $(document).ready(function(){
+                        $("#catat_meter_add").show();
+                        $("#form_id_meter").val("<?php echo $d_edit_m['no']; ?>");
+
+                        // Sembunyikan dropdown, tampilkan teks terkunci
+                        var username = "<?php echo htmlspecialchars($d_edit_m['username']); ?>";
+                        var nama     = "<?php echo htmlspecialchars($d_edit_m['nama'] ?? $d_edit_m['username']); ?>";
+                        $("#sel_id_pelanggan").hide().prop("required", false).removeAttr("name");
+                        $("#pelanggan_locked").show();
+                        $("#txt_pelanggan_display").val(username + " – " + nama);
+                        $("#hid_id_pelanggan").val(username);
+
+                        $("#inp_tgl").val("<?php echo $d_edit_m['tgl']; ?>");
+                        $("#inp_waktu").val("<?php echo substr($d_edit_m['waktu'], 0, 5); ?>");
+                        $("#inp_meter_awal").val("<?php echo $d_edit_m['meter_awal']; ?>");
+                        $("#inp_meter_akhir").val("<?php echo $d_edit_m['meter_akhir']; ?>");
+                        $("#btn_meter_submit").attr("value", "meter_edit");
+                        $("#btn_meter_submit").html("<i class='fas fa-save me-1'></i> Simpan Perubahan");
+
+                        // Scroll ke form
+                        $('html, body').animate({ scrollTop: $("#catat_meter_add").offset().top - 80 }, 400);
+                    });
+                    </script>
+                    <?php } } ?>
+
+
+            </div>
+        </main>
+
+        <div class="modal fade" id="myModal" tabindex="-1" aria-labelledby="myModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="myModalLabel"><i class="fas fa-trash me-2"></i>Konfirmasi Hapus</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        Yakin hapus tarif <strong id="modal_id_tarif_text"></strong>? Tindakan ini tidak dapat dibatalkan.
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <form method="POST" action="index.php">
+                            <input type="hidden" name="id_tarif" value="">
+                            <button type="submit" name="tombol" value="tarif_hapus" class="btn btn-danger">
+                                <i class="fas fa-trash me-1"></i> Ya, Hapus
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal fade" id="myModalMeter" tabindex="-1" aria-labelledby="myModalMeterLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="myModalMeterLabel"><i class="fas fa-trash me-2"></i>Konfirmasi Hapus Meter</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        Yakin hapus data meter pelanggan <strong id="modal_id_meter_text"></strong>? Tindakan ini tidak dapat dibatalkan.
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <form method="POST" action="index.php">
+                            <input type="hidden" name="id_meter" value="" id="modal_id_meter_hidden">
+                            <button type="submit" name="tombol" value="meter_hapus" class="btn btn-danger">
+                                <i class="fas fa-trash me-1"></i> Ya, Hapus
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <footer class="py-4 bg-light mt-auto">
             <div class="container-fluid px-4">
                 <div class="d-flex align-items-center justify-content-between small">
-                    <div class="text-muted">Copyright &copy; Flavia &amp; Rosita</div>
+                    <div class="text-muted">Copyright &copy; Flavia & Rosita <?php echo date("Y") ?></div>
                     <div>
                         <a href="#">Privacy Policy</a>
                         &middot;
@@ -710,5 +1120,71 @@ if (!empty($page)) {
 <script src="../assets/demo/chart-bar-demo.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/simple-datatables@7.1.2/dist/umd/simple-datatables.min.js" crossorigin="anonymous"></script>
 <script src="../js/datatables-simple-demo.js"></script>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+<script src="../js/air.js"></script>
+<script>
+$(document).ready(function() {
+
+    // ─── Init DataTable Tarif ────────────────────────────────────
+    $('#tarif_table').DataTable({
+        language: {
+            search:     "Cari:",
+            lengthMenu: "Tampilkan _MENU_ data per halaman",
+            info:       "Menampilkan _START_ s/d _END_ dari _TOTAL_ data",
+            infoEmpty:  "Menampilkan 0 data",
+            emptyTable: "Belum ada data tarif", // Ditambahkan agar otomatis tampil jika kosong
+            zeroRecords:"Tidak ada data yang cocok",
+            paginate: { previous: "&laquo;", next: "&raquo;" }
+        },
+        pageLength: 10,
+        columnDefs: [
+            { orderable: false, targets: [0, 5] } // kolom No & Aksi tidak bisa di-sort
+        ]
+    });
+
+    // ─── Init DataTable Catat Meter ──────────────────────────────
+    $('#meter_table').DataTable({
+        language: {
+            search:     "Cari:",
+            lengthMenu: "Tampilkan _MENU_ data per halaman",
+            info:       "Menampilkan _START_ s/d _END_ dari _TOTAL_ data",
+            infoEmpty:  "Menampilkan 0 data",
+            emptyTable: "Belum ada data meter", // Ditambahkan agar otomatis tampil jika kosong
+            zeroRecords:"Tidak ada data yang cocok",
+            paginate: { previous: "&laquo;", next: "&raquo;" }
+        },
+        pageLength: 10,
+        columnDefs: [
+            { orderable: false, targets: [0, 6] } // kolom No & Aksi tidak bisa di-sort
+        ]
+    });
+
+    // ─── Tombol Tambah Tarif toggle form ─────────────────────────
+    $('#btn_tambah_tarif').click(function() {
+        $('#tarif_add').slideToggle();
+        $('html, body').animate({ scrollTop: $('#tarif_add').offset().top - 80 }, 400);
+    });
+
+    // ─── Modal Hapus Tarif: isi hidden input id_tarif ─────────────
+    $('#myModal').on('show.bs.modal', function(event) {
+        var btn    = $(event.relatedTarget);
+        var id_t   = btn.data('id_tarif');
+        $(this).find('input[name="id_tarif"]').val(id_t);
+        $(this).find('#modal_id_tarif_text').text(id_t);
+    });
+
+    // ─── Modal Hapus Catat Meter: isi hidden input id_meter ──────
+    $('#myModalMeter').on('show.bs.modal', function(event) {
+        var btn    = $(event.relatedTarget);
+        var id_m   = btn.data('id_meter');
+        var id_p   = btn.data('id_pelanggan');
+        $(this).find('#modal_id_meter_hidden').val(id_m);
+        $(this).find('#modal_id_meter_text').text(id_p);
+    });
+
+});
+</script>
 </body>
 </html>
