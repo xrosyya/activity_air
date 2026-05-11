@@ -474,32 +474,30 @@ if (isset($_POST['tombol'])) {
                 </div>
                 <?php endif; /* end dashboard only */ ?>
                 <?php
-                // Nilai default dan Mode
-                $user = $pass2 = $nama = $alamat = $kota = $telephone = '';
-                $level = $tipe = $status = '';
+                // Nilai default dan Mode (gunakan prefix f_ agar tidak menimpa $level session)
+                $f_user = $f_pass2 = $f_nama = $f_alamat = $f_kota = $f_telephone = '';
+                $f_level = $f_tipe = $f_status = '';
                 $mode = "user_add"; 
                 $txt_tombol = "Simpan";
-                $display_form = "none"; // Form disembunyikan secara default
-
-                
+                $display_form = "none";
 
                 // 1. LOGIKA KETIKA TOMBOL EDIT DIPENCET (Mengambil data dari DB)
                 if (isset($_GET['p']) && $_GET['p'] == 'user_edit' && isset($_GET['user'])) {
                     $mode = "user_edit";
                     $txt_tombol = "Update Data";
-                    $display_form = "block"; // Munculkan form otomatis
+                    $display_form = "block";
                     $get_user = $_GET['user'];
                     
                     $q_edit = mysqli_query($koneksi, "SELECT * FROM login WHERE username='$get_user'");
                     if($d_edit = mysqli_fetch_assoc($q_edit)){
-                        $user      = $d_edit['username'];
-                        $nama      = $d_edit['nama'];
-                        $alamat    = $d_edit['alamat'];
-                        $kota      = $d_edit['kota'];
-                        $telephone = $d_edit['telephone'];
-                        $level     = $d_edit['level'];
-                        $tipe      = $d_edit['tipe'];
-                        $status    = $d_edit['status'];
+                        $f_user      = $d_edit['username'];
+                        $f_nama      = $d_edit['nama'];
+                        $f_alamat    = $d_edit['alamat'];
+                        $f_kota      = $d_edit['kota'];
+                        $f_telephone = $d_edit['telephone'];
+                        $f_level     = $d_edit['level'];
+                        $f_tipe      = $d_edit['tipe'];
+                        $f_status    = $d_edit['status'];
                     }
                 }
 
@@ -575,7 +573,7 @@ if (isset($_POST['tombol'])) {
                     }
                 }
                 ?>
-                <?php if (in_array($page, ['user', 'user_edit', '']) && isset($_GET['p']) && in_array($_GET['p'], ['user','user_edit'])) : ?>
+                <?php if (in_array($page, ['user', 'user_edit'])) : ?>
                 <div id="user_add" class="card mb-4" style="display: <?php echo $display_form; ?>;" >
                     <div class="card-header">
                         <i class="fa-solid fa-user-plus me-2 text-success fa-fade"></i> User
@@ -584,7 +582,7 @@ if (isset($_POST['tombol'])) {
                        <form method="post" class="needs-validation" id="user_form">
                             <div class="mb-3">
                                 <label for="username" class="form-label">Username:</label>
-                                <input type="text" class="form-control" id="username" placeholder="Enter username" name="username" value="<?php echo $user ?>" <?php if($mode == 'user_edit') echo 'readonly'; ?> required>
+                                <input type="text" class="form-control" id="username" placeholder="Enter username" name="username" value="<?php echo $f_user ?>" <?php if($mode == 'user_edit') echo 'readonly'; ?> required>
                             </div>
                             <div class="mb-3">
                                 <label for="pwd" class="form-label">Password:</label>
@@ -592,19 +590,19 @@ if (isset($_POST['tombol'])) {
                             </div>
                             <div class="mb-3">
                                 <label for="nama" class="form-label">Nama:</label>
-                                <input type="text" class="form-control" id="pwd" placeholder="Enter nama" name="nama" value="<?php echo $nama ?>"  required>
+                                <input type="text" class="form-control" id="pwd" placeholder="Enter nama" name="nama" value="<?php echo $f_nama ?>"  required>
                             </div>
                             <div class="mb-3">
                                 <label for="alamat">Alamat:</label>
-                                <textarea class="form-control" rows="5" id="alamat" name="alamat"><?php echo $alamat ?></textarea>
+                                <textarea class="form-control" rows="5" id="alamat" name="alamat"><?php echo $f_alamat ?></textarea>
                             </div>
                             <div class="mb-3">
                                 <label for="kota" class="form-label">Kota:</label>
-                                <input type="text" class="form-control" id="kota" placeholder="Enter kota" name="kota" value="<?php echo $kota ?>">
+                                <input type="text" class="form-control" id="kota" placeholder="Enter kota" name="kota" value="<?php echo $f_kota ?>">
                             </div>
                             <div class="mb-3">
                                 <label for="telephone" class="form-label">Telephone:</label>
-                                <input type="text" class="form-control" id="telephone" placeholder="Enter telephone" name="telephone" value="<?php echo $telephone ?>">
+                                <input type="text" class="form-control" id="telephone" placeholder="Enter telephone" name="telephone" value="<?php echo $f_telephone ?>">
                             </div>
                             <div class="mb-3">
                                 <label for="level" class="form-label">Level:</label>
@@ -613,7 +611,7 @@ if (isset($_POST['tombol'])) {
                                     <?php
                                     $lv = array("admin", "bendahara", "petugas", "warga");
                                     foreach ($lv as $lv2) {
-                                        if($level == $lv2) $sel = "SELECTED";
+                                        if($f_level == $lv2) $sel = "SELECTED";
                                         else $sel = "";
                                         echo "<option value=$lv2 $sel>" . ucwords($lv2) . "</option>";
                                     }
@@ -627,7 +625,7 @@ if (isset($_POST['tombol'])) {
                                     <?php
                                     $t = array("RT", "kos");
                                     foreach ($t as $t2) {
-                                        if($tipe == $t2) $sel = "SELECTED";
+                                        if($f_tipe == $t2) $sel = "SELECTED";
                                         else $sel = "";
                                         echo "<option value=$t2 $sel>" . ucwords($t2) . "</option>";
                                     }
@@ -641,7 +639,7 @@ if (isset($_POST['tombol'])) {
                                     <?php
                                     $s = array("AKTIF", "TIDAK AKTIF");
                                     foreach ($s as $s2) {
-                                        if($status == $s2) $sel = "SELECTED";
+                                        if($f_status == $s2) $sel = "SELECTED";
                                         else $sel = "";
                                         echo "<option value='$s2' $sel>$s2</option>";
                                     }
@@ -974,11 +972,16 @@ if (isset($_POST['tombol'])) {
                         <form id="meter_form" method="POST" action="index.php">
                             <input type="hidden" name="id_meter" id="form_id_meter" value="">
 
+                            <?php
+                            // Cek apakah ini mode edit meter
+                            $is_meter_edit_mode = ($page == "meter_edit" && isset($_GET['id']));
+                            ?>
                             <div class="row mb-3 align-items-center">
                                 <label class="col-md-3 col-form-label fw-bold fs-6">ID Pelanggan</label>
                                 <div class="col-md-9">
-                                    <!-- Dropdown: tampil saat mode tambah -->
-                                    <select class="form-select form-select-lg" name="id_pelanggan" id="sel_id_pelanggan" required>
+                                    <!-- Dropdown: tampil saat mode tambah, disembunyikan saat mode edit -->
+                                    <select class="form-select form-select-lg" name="id_pelanggan" id="sel_id_pelanggan"
+                                        <?php echo $is_meter_edit_mode ? 'style="display:none;" disabled' : 'required'; ?>>
                                         <option value="">-- Pilih Pelanggan --</option>
                                         <?php
                                         $qwarga = mysqli_query($koneksi, "SELECT username, nama FROM login WHERE LOWER(level)='warga' AND UPPER(status)='AKTIF' ORDER BY nama ASC");
@@ -990,7 +993,7 @@ if (isset($_POST['tombol'])) {
                                         ?>
                                     </select>
                                     <!-- Tampil saat mode edit: teks terkunci + hidden input -->
-                                    <div id="pelanggan_locked" style="display:none;">
+                                    <div id="pelanggan_locked" style="<?php echo $is_meter_edit_mode ? 'display:block;' : 'display:none;'; ?>">
                                         <input type="text" class="form-control form-control-lg bg-light text-muted" id="txt_pelanggan_display" readonly>
                                         <input type="hidden" name="id_pelanggan" id="hid_id_pelanggan">
                                     </div>
@@ -1034,8 +1037,10 @@ if (isset($_POST['tombol'])) {
                                 <a href="index.php?p=catat_meter" class="btn btn-secondary btn-lg px-4">
                                     <i class="fas fa-arrow-left me-1"></i> Batal
                                 </a>
-                                <button type="submit" class="btn btn-primary btn-lg px-5" name="tombol" id="btn_meter_submit" value="meter_add">
-                                    <i class="fas fa-save me-1"></i> Simpan Data
+                                <button type="submit" class="btn btn-primary btn-lg px-5" name="tombol" id="btn_meter_submit"
+                                    value="<?php echo $is_meter_edit_mode ? 'meter_edit' : 'meter_add'; ?>">
+                                    <i class="fas fa-save me-1"></i>
+                                    <?php echo $is_meter_edit_mode ? 'Simpan Perubahan' : 'Simpan Data'; ?>
                                 </button>
                             </div>
                         </form>
@@ -1054,11 +1059,8 @@ if (isset($_POST['tombol'])) {
                         $("#catat_meter_add").show();
                         $("#form_id_meter").val("<?php echo $d_edit_m['no']; ?>");
 
-                        // Sembunyikan dropdown, tampilkan teks terkunci
                         var username = "<?php echo htmlspecialchars($d_edit_m['username']); ?>";
                         var nama     = "<?php echo htmlspecialchars($d_edit_m['nama'] ?? $d_edit_m['username']); ?>";
-                        $("#sel_id_pelanggan").hide().prop("required", false).removeAttr("name");
-                        $("#pelanggan_locked").show();
                         $("#txt_pelanggan_display").val(username + " – " + nama);
                         $("#hid_id_pelanggan").val(username);
 
@@ -1066,8 +1068,6 @@ if (isset($_POST['tombol'])) {
                         $("#inp_waktu").val("<?php echo substr($d_edit_m['waktu'], 0, 5); ?>");
                         $("#inp_meter_awal").val("<?php echo $d_edit_m['meter_awal']; ?>");
                         $("#inp_meter_akhir").val("<?php echo $d_edit_m['meter_akhir']; ?>");
-                        $("#btn_meter_submit").attr("value", "meter_edit");
-                        $("#btn_meter_submit").html("<i class='fas fa-save me-1'></i> Simpan Perubahan");
 
                         // Scroll ke form
                         $('html, body').animate({ scrollTop: $("#catat_meter_add").offset().top - 80 }, 400);
