@@ -228,19 +228,6 @@ if (isset($_POST['tombol'])) {
                 background: #e8f5e9 !important; border-color: #1cc88a !important;
                 color: #1cc88a !important; border-radius: 6px;
             }
-            /* ===== CSS DATA USER ===== */
-            #user_search:focus {
-                outline: none; box-shadow: 0 0 0 0.15rem rgba(28,200,138,.25); border-color: #1cc88a;
-            }
-            #user_table_wrapper .dataTables_paginate .paginate_button.current,
-            #user_table_wrapper .dataTables_paginate .paginate_button.current:hover {
-                background: #1cc88a !important; border-color: #1cc88a !important;
-                color: #fff !important; border-radius: 6px;
-            }
-            #user_table_wrapper .dataTables_paginate .paginate_button:hover {
-                background: #e8f5e9 !important; border-color: #1cc88a !important;
-                color: #1cc88a !important; border-radius: 6px;
-            }
             /* ===== CSS CATAT METER ===== */
             #meter_table_wrapper .dataTables_filter input {
                 border-radius: 8px; border: 1px solid #4e73df; padding: 5px 12px;
@@ -410,7 +397,6 @@ if (isset($_POST['tombol'])) {
                     <?php unset($_SESSION['notif']); ?>
                 <?php endif; ?>
 
-                <?php if (empty($page)) : ?>
                 <div class="row" id="summary">
                     <div class="col-xl-3 col-md-6">
                         <div class="card bg-primary text-white mb-4">
@@ -472,32 +458,33 @@ if (isset($_POST['tombol'])) {
                         </div>
                     </div>
                 </div>
-                <?php endif; /* end dashboard only */ ?>
                 <?php
-                // Nilai default dan Mode (gunakan prefix f_ agar tidak menimpa $level session)
-                $f_user = $f_pass2 = $f_nama = $f_alamat = $f_kota = $f_telephone = '';
-                $f_level = $f_tipe = $f_status = '';
+                // Nilai default dan Mode
+                $user = $pass2 = $nama = $alamat = $kota = $telephone = '';
+                $level = $tipe = $status = '';
                 $mode = "user_add"; 
                 $txt_tombol = "Simpan";
-                $display_form = "none";
+                $display_form = "none"; // Form disembunyikan secara default
+
+                
 
                 // 1. LOGIKA KETIKA TOMBOL EDIT DIPENCET (Mengambil data dari DB)
                 if (isset($_GET['p']) && $_GET['p'] == 'user_edit' && isset($_GET['user'])) {
                     $mode = "user_edit";
                     $txt_tombol = "Update Data";
-                    $display_form = "block";
+                    $display_form = "block"; // Munculkan form otomatis
                     $get_user = $_GET['user'];
                     
                     $q_edit = mysqli_query($koneksi, "SELECT * FROM login WHERE username='$get_user'");
                     if($d_edit = mysqli_fetch_assoc($q_edit)){
-                        $f_user      = $d_edit['username'];
-                        $f_nama      = $d_edit['nama'];
-                        $f_alamat    = $d_edit['alamat'];
-                        $f_kota      = $d_edit['kota'];
-                        $f_telephone = $d_edit['telephone'];
-                        $f_level     = $d_edit['level'];
-                        $f_tipe      = $d_edit['tipe'];
-                        $f_status    = $d_edit['status'];
+                        $user      = $d_edit['username'];
+                        $nama      = $d_edit['nama'];
+                        $alamat    = $d_edit['alamat'];
+                        $kota      = $d_edit['kota'];
+                        $telephone = $d_edit['telephone'];
+                        $level     = $d_edit['level'];
+                        $tipe      = $d_edit['tipe'];
+                        $status    = $d_edit['status'];
                     }
                 }
 
@@ -573,105 +560,162 @@ if (isset($_POST['tombol'])) {
                     }
                 }
                 ?>
-                <?php if (in_array($page, ['user', 'user_edit'])) : ?>
-                <div id="user_add" class="card mb-4" style="display: <?php echo $display_form; ?>;" >
-                    <div class="card-header">
-                        <i class="fa-solid fa-user-plus me-2 text-success fa-fade"></i> User
+                <div id="user_add" class="card mb-4" style="display: <?php echo $display_form; ?>;">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <?php if($mode == 'user_edit'): ?>
+                            <i class="fa-solid fa-user-pen me-1 text-warning fa-fade"></i>
+                            <span>Edit User &mdash; <strong><?php echo htmlspecialchars($user); ?></strong></span>
+                        <?php else: ?>
+                            <i class="fa-solid fa-user-plus me-1 text-success fa-fade"></i>
+                            <span>Tambah User</span>
+                        <?php endif; ?>
                     </div>
                     <div class="card-body">
-                       <form method="post" class="needs-validation" id="user_form">
+
+                        <?php if($mode == 'user_edit'): ?>
+                        <!-- INFO CARD: username dikunci saat edit -->
+                        <div class="alert alert-info d-flex align-items-center gap-2 py-2 mb-4" style="border-left: 4px solid #0dcaf0;">
+                            <i class="fas fa-lock"></i>
+                            <span>Mode Edit &mdash; Username <strong><?php echo htmlspecialchars($user); ?></strong> terkunci. Ubah data lain sesuai kebutuhan.</span>
+                        </div>
+                        <?php endif; ?>
+
+                        <form method="post" class="needs-validation" id="user_form">
+
+                            <!-- USERNAME: dikunci saat edit, bisa diisi saat tambah -->
                             <div class="mb-3">
-                                <label for="username" class="form-label">Username:</label>
-                                <input type="text" class="form-control" id="username" placeholder="Enter username" name="username" value="<?php echo $f_user ?>" <?php if($mode == 'user_edit') echo 'readonly'; ?> required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="pwd" class="form-label">Password:</label>
-                                <input type="password" class="form-control" id="pwd" placeholder="Kosongkan jika tidak ingin ubah password" name="pwd">
-                            </div>
-                            <div class="mb-3">
-                                <label for="nama" class="form-label">Nama:</label>
-                                <input type="text" class="form-control" id="pwd" placeholder="Enter nama" name="nama" value="<?php echo $f_nama ?>"  required>
-                            </div>
-                            <div class="mb-3">
-                                <label for="alamat">Alamat:</label>
-                                <textarea class="form-control" rows="5" id="alamat" name="alamat"><?php echo $f_alamat ?></textarea>
-                            </div>
-                            <div class="mb-3">
-                                <label for="kota" class="form-label">Kota:</label>
-                                <input type="text" class="form-control" id="kota" placeholder="Enter kota" name="kota" value="<?php echo $f_kota ?>">
-                            </div>
-                            <div class="mb-3">
-                                <label for="telephone" class="form-label">Telephone:</label>
-                                <input type="text" class="form-control" id="telephone" placeholder="Enter telephone" name="telephone" value="<?php echo $f_telephone ?>">
-                            </div>
-                            <div class="mb-3">
-                                <label for="level" class="form-label">Level:</label>
-                                <select class="form-select" name="level" required>
-                                    <option value="">Level</option>
-                                    <?php
-                                    $lv = array("admin", "bendahara", "petugas", "warga");
-                                    foreach ($lv as $lv2) {
-                                        if($f_level == $lv2) $sel = "SELECTED";
-                                        else $sel = "";
-                                        echo "<option value=$lv2 $sel>" . ucwords($lv2) . "</option>";
-                                    }
-                                    ?>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="tipe" class="form-label">Tipe:</label>
-                                <select class="form-select" name="tipe">
-                                    <option value="">Tipe</option>
-                                    <?php
-                                    $t = array("RT", "kos");
-                                    foreach ($t as $t2) {
-                                        if($f_tipe == $t2) $sel = "SELECTED";
-                                        else $sel = "";
-                                        echo "<option value=$t2 $sel>" . ucwords($t2) . "</option>";
-                                    }
-                                    ?>
-                                </select>
-                            </div>
-                            <div class="mb-3">
-                                <label for="status" class="form-label">Status:</label>
-                                <select class="form-select" name="status">
-                                    <option value="">Status</option>
-                                    <?php
-                                    $s = array("AKTIF", "TIDAK AKTIF");
-                                    foreach ($s as $s2) {
-                                        if($f_status == $s2) $sel = "SELECTED";
-                                        else $sel = "";
-                                        echo "<option value='$s2' $sel>$s2</option>";
-                                    }
-                                    ?>
-                                </select>
+                                <label for="username" class="form-label fw-semibold">Username:</label>
+                                <?php if($mode == 'user_edit'): ?>
+                                    <!-- Tampilkan sebagai display box, tetap kirim value via hidden input -->
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light text-muted"><i class="fas fa-lock fa-sm"></i></span>
+                                        <input type="text" class="form-control bg-light text-muted fw-bold"
+                                               value="<?php echo htmlspecialchars($user); ?>"
+                                               readonly tabindex="-1">
+                                    </div>
+                                    <input type="hidden" name="username" value="<?php echo htmlspecialchars($user); ?>">
+                                    <div class="form-text text-muted">Username tidak dapat diubah saat mode edit.</div>
+                                <?php else: ?>
+                                    <input type="text" class="form-control" id="username"
+                                           placeholder="Masukkan username" name="username"
+                                           value="<?php echo htmlspecialchars($user ?? ''); ?>" required>
+                                <?php endif; ?>
                             </div>
 
-                            <button type="submit" class="btn btn-primary" name="tombol" value="<?php echo $mode; ?>"><?php echo $txt_tombol; ?></button>
+                            <!-- PASSWORD -->
+                            <div class="mb-3">
+                                <label for="pwd" class="form-label fw-semibold">Password:</label>
+                                <input type="password" class="form-control" id="pwd" name="pwd"
+                                       placeholder="<?php echo $mode == 'user_edit' ? 'Kosongkan jika tidak ingin mengubah password' : 'Masukkan password'; ?>"
+                                       <?php if($mode != 'user_edit') echo 'required'; ?>>
+                                <?php if($mode == 'user_edit'): ?>
+                                    <div class="form-text text-muted">Biarkan kosong jika tidak ingin mengubah password.</div>
+                                <?php endif; ?>
+                            </div>
 
-                            <?php if($mode == "user_edit"): ?>
-                                <a href="index.php?p=user" class="btn btn-secondary">Batal Edit</a>
-                            <?php endif; ?>
-                            </form> 
+                            <!-- NAMA + TELEPHONE (2 kolom) -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="nama" class="form-label fw-semibold">Nama:</label>
+                                    <input type="text" class="form-control" id="nama"
+                                           placeholder="Masukkan nama lengkap" name="nama"
+                                           value="<?php echo htmlspecialchars($nama ?? ''); ?>" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="telephone" class="form-label fw-semibold">Telephone:</label>
+                                    <input type="text" class="form-control" id="telephone"
+                                           placeholder="Masukkan nomor telepon" name="telephone"
+                                           value="<?php echo htmlspecialchars($telephone ?? ''); ?>">
+                                </div>
+                            </div>
+
+                            <!-- ALAMAT -->
+                            <div class="mb-3">
+                                <label for="alamat" class="form-label fw-semibold">Alamat:</label>
+                                <textarea class="form-control" rows="3" id="alamat" name="alamat"
+                                          placeholder="Masukkan alamat lengkap"><?php echo htmlspecialchars($alamat ?? ''); ?></textarea>
+                            </div>
+
+                            <!-- KOTA + LEVEL + TIPE + STATUS (2 kolom) -->
+                            <div class="row g-3 mb-3">
+                                <div class="col-md-6">
+                                    <label for="kota" class="form-label fw-semibold">Kota:</label>
+                                    <input type="text" class="form-control" id="kota"
+                                           placeholder="Masukkan kota" name="kota"
+                                           value="<?php echo htmlspecialchars($kota ?? ''); ?>">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="level" class="form-label fw-semibold">Level:</label>
+                                    <select class="form-select" name="level" required>
+                                        <option value="">-- Pilih Level --</option>
+                                        <?php
+                                        $lv = array("admin", "bendahara", "petugas", "warga");
+                                        foreach ($lv as $lv2) {
+                                            $sel = (isset($level) && $level == $lv2) ? "selected" : "";
+                                            echo "<option value='$lv2' $sel>" . ucwords($lv2) . "</option>";
+                                        }
+                                        ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="tipe" class="form-label fw-semibold">Tipe:</label>
+                                    <select class="form-select" name="tipe">
+                                        <option value="">-- Pilih Tipe --</option>
+                                        <?php
+                                        $tp = array("RT", "kos");
+                                        foreach ($tp as $t2) {
+                                            $sel = (isset($tipe) && $tipe == $t2) ? "selected" : "";
+                                            echo "<option value='$t2' $sel>" . ucwords($t2) . "</option>";
+                                        }
+                                        ?>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="status" class="form-label fw-semibold">Status:</label>
+                                    <select class="form-select" name="status">
+                                        <option value="">-- Pilih Status --</option>
+                                        <?php
+                                        $st = array("AKTIF", "TIDAK AKTIF");
+                                        foreach ($st as $s2) {
+                                            $sel = (isset($status) && $status == $s2) ? "selected" : "";
+                                            echo "<option value='$s2' $sel>$s2</option>";
+                                        }
+                                        ?>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- TOMBOL AKSI -->
+                            <div class="d-flex gap-2 mt-4 pt-2 border-top">
+                                <button type="submit" class="btn <?php echo $mode == 'user_edit' ? 'btn-warning' : 'btn-primary'; ?> px-4"
+                                        name="tombol" value="<?php echo $mode; ?>">
+                                    <i class="fas <?php echo $mode == 'user_edit' ? 'fa-save' : 'fa-plus'; ?> me-1"></i>
+                                    <?php echo $txt_tombol; ?>
+                                </button>
+                                <?php if($mode == "user_edit"): ?>
+                                    <a href="index.php?p=user" class="btn btn-secondary px-4">
+                                        <i class="fas fa-times me-1"></i> Batal
+                                    </a>
+                                <?php endif; ?>
+                            </div>
+
+                        </form>
                     </div>
                 </div>
                 <div class="card mb-4" id="user_list">
-                    <div class="card-header">
-                        <i class="fa-solid fa-users me-2 text-success fa-fade"></i> Data User
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span><i class="fa-solid fa-users me-2 text-success fa-fade"></i> Data User</span>
+                        <?php if($mode != 'user_edit'): ?>
+                        <button type="button" id="btn_tambah_user" class="btn btn-success btn-sm px-3">
+                            <i class="fas fa-user-plus me-1"></i> + User
+                        </button>
+                        <?php endif; ?>
                     </div>
-                    <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <button class="btn btn-success btn-sm" id="btn_tambah_user">
-                                <i class="fas fa-user-plus me-1"></i> User
-                            </button>
-                            <div>
-                                <input type="text" id="user_search" class="form-control form-control-sm" placeholder="Search..." style="border-radius:8px; border:1px solid #1cc88a; width:200px;">
-                            </div>
-                        </div>
-                        <div class="table-responsive">
-                        <table id="user_table" class="table table-bordered table-striped table-hover align-middle">
-                            <thead class="table-light">
+                    <div class="card-body table-responsive">
+                        <table id="datatablesSimple" class="table table-bordered table-striped table-hover align-middle mb-0">
+                            <thead class="table-dark text-center">
                                 <tr>
+                                    <th>No</th>
                                     <th>Username</th>
                                     <th>Nama</th>
                                     <th>Alamat</th>
@@ -680,49 +724,57 @@ if (isset($_POST['tombol'])) {
                                     <th>Level</th>
                                     <th>Tipe</th>
                                     <th>Status</th>
-                                    <th></th>
+                                    <th class="text-center">Aksi</th>
                                 </tr>
                             </thead>
+
                             <tbody>
                                 <?php
-                                $q=mysqli_query($koneksi,"SELECT username, nama, alamat, kota, telephone, level, tipe, status FROM login ORDER BY level ASC");
-                                while($d=mysqli_fetch_assoc($q)) {
-                                    $user_r   = htmlspecialchars($d['username']);
-                                    $nama_r   = htmlspecialchars($d['nama']);
-                                    $alamat_r = htmlspecialchars($d['alamat']);
-                                    $kota_r   = htmlspecialchars($d['kota']);
-                                    $tele_r   = htmlspecialchars($d['telephone']);
-                                    $level_r  = htmlspecialchars($d['level']);
-                                    $tipe_r   = htmlspecialchars($d['tipe']);
-                                    $status_r = htmlspecialchars($d['status']);
+                                $q = mysqli_query($koneksi, "SELECT username, nama, alamat, kota, telephone, level, tipe, status FROM login ORDER BY level ASC");
+                                $no = 1;
+                                while ($d = mysqli_fetch_assoc($q)) {
+                                    $user      = htmlspecialchars($d['username']);
+                                    $nama      = htmlspecialchars($d['nama']);
+                                    $alamat    = htmlspecialchars($d['alamat'] ?: '-');
+                                    $kota      = htmlspecialchars($d['kota'] ?: '-');
+                                    $telephone = htmlspecialchars($d['telephone'] ?: '-');
+                                    $level     = htmlspecialchars($d['level'] ?: '-');
+                                    $tipe      = htmlspecialchars($d['tipe'] ?: '-');
+                                    $status_raw = $d['status'];
+
+                                    if ($status_raw === 'AKTIF') {
+                                        $badge_status = "<span class='badge bg-success px-2 py-1'>AKTIF</span>";
+                                    } elseif (!empty($status_raw)) {
+                                        $badge_status = "<span class='badge bg-secondary px-2 py-1'>" . htmlspecialchars($status_raw) . "</span>";
+                                    } else {
+                                        $badge_status = "<span class='text-muted'>-</span>";
+                                    }
 
                                     echo "<tr>
-                                        <td>$user_r</td>
-                                        <td>$nama_r</td>
-                                        <td>$alamat_r</td>
-                                        <td>$kota_r</td>
-                                        <td>$tele_r</td>
-                                        <td>$level_r</td>
-                                        <td>$tipe_r</td>
-                                        <td>$status_r</td>
-                                        <td>
-                                            <a href='index.php?p=user_edit&user=$user_r' class='btn btn-success btn-sm'>
+                                        <td class='text-center text-muted'>$no</td>
+                                        <td><span class='fw-semibold text-dark'>$user</span></td>
+                                        <td>$nama</td>
+                                        <td>$alamat</td>
+                                        <td>$kota</td>
+                                        <td>$telephone</td>
+                                        <td><span class='badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 px-2'>$level</span></td>
+                                        <td class='text-center'>$tipe</td>
+                                        <td class='text-center'>$badge_status</td>
+                                        <td class='text-center' style='white-space:nowrap;'>
+                                            <a href='index.php?p=user_edit&user=$user' class='btn btn-success btn-sm' title='Edit'>
                                                 <i class='fas fa-edit'></i>
-                                            </a> 
-                                            <a href='index.php?p=user_hapus&user=$user_r' class='btn btn-danger btn-sm' onclick='return confirm(\"Yakin ingin menghapus data ini?\")'>
+                                            </a>
+                                            <a href='index.php?p=user_hapus&user=$user' class='btn btn-danger btn-sm' title='Hapus' onclick='return confirm(\"Yakin ingin menghapus data $user?\")'>
                                                 <i class='fas fa-trash'></i>
                                             </a>
                                         </td>
                                     </tr>";
+                                    $no++;
                                 }
                                 ?>
-                            </tbody>
                         </table>
-                        </div>
-                        <div id="user_table_info" class="text-muted small mt-2"></div>
                     </div>
                 </div>
-                <?php endif; /* end user section */ ?>
 
                 <div class="card mb-4 shadow-sm" id="tarif_list" style="border-top: 4px solid #1cc88a; border-radius: 0.5rem;">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8fff8 0%, #e8f5e9 100%);">
@@ -972,16 +1024,11 @@ if (isset($_POST['tombol'])) {
                         <form id="meter_form" method="POST" action="index.php">
                             <input type="hidden" name="id_meter" id="form_id_meter" value="">
 
-                            <?php
-                            // Cek apakah ini mode edit meter
-                            $is_meter_edit_mode = ($page == "meter_edit" && isset($_GET['id']));
-                            ?>
                             <div class="row mb-3 align-items-center">
                                 <label class="col-md-3 col-form-label fw-bold fs-6">ID Pelanggan</label>
                                 <div class="col-md-9">
-                                    <!-- Dropdown: tampil saat mode tambah, disembunyikan saat mode edit -->
-                                    <select class="form-select form-select-lg" name="id_pelanggan" id="sel_id_pelanggan"
-                                        <?php echo $is_meter_edit_mode ? 'style="display:none;" disabled' : 'required'; ?>>
+                                    <!-- Dropdown: tampil saat mode tambah -->
+                                    <select class="form-select form-select-lg" name="id_pelanggan" id="sel_id_pelanggan" required>
                                         <option value="">-- Pilih Pelanggan --</option>
                                         <?php
                                         $qwarga = mysqli_query($koneksi, "SELECT username, nama FROM login WHERE LOWER(level)='warga' AND UPPER(status)='AKTIF' ORDER BY nama ASC");
@@ -993,7 +1040,7 @@ if (isset($_POST['tombol'])) {
                                         ?>
                                     </select>
                                     <!-- Tampil saat mode edit: teks terkunci + hidden input -->
-                                    <div id="pelanggan_locked" style="<?php echo $is_meter_edit_mode ? 'display:block;' : 'display:none;'; ?>">
+                                    <div id="pelanggan_locked" style="display:none;">
                                         <input type="text" class="form-control form-control-lg bg-light text-muted" id="txt_pelanggan_display" readonly>
                                         <input type="hidden" name="id_pelanggan" id="hid_id_pelanggan">
                                     </div>
@@ -1037,10 +1084,8 @@ if (isset($_POST['tombol'])) {
                                 <a href="index.php?p=catat_meter" class="btn btn-secondary btn-lg px-4">
                                     <i class="fas fa-arrow-left me-1"></i> Batal
                                 </a>
-                                <button type="submit" class="btn btn-primary btn-lg px-5" name="tombol" id="btn_meter_submit"
-                                    value="<?php echo $is_meter_edit_mode ? 'meter_edit' : 'meter_add'; ?>">
-                                    <i class="fas fa-save me-1"></i>
-                                    <?php echo $is_meter_edit_mode ? 'Simpan Perubahan' : 'Simpan Data'; ?>
+                                <button type="submit" class="btn btn-primary btn-lg px-5" name="tombol" id="btn_meter_submit" value="meter_add">
+                                    <i class="fas fa-save me-1"></i> Simpan Data
                                 </button>
                             </div>
                         </form>
@@ -1059,8 +1104,11 @@ if (isset($_POST['tombol'])) {
                         $("#catat_meter_add").show();
                         $("#form_id_meter").val("<?php echo $d_edit_m['no']; ?>");
 
+                        // Sembunyikan dropdown, tampilkan teks terkunci
                         var username = "<?php echo htmlspecialchars($d_edit_m['username']); ?>";
                         var nama     = "<?php echo htmlspecialchars($d_edit_m['nama'] ?? $d_edit_m['username']); ?>";
+                        $("#sel_id_pelanggan").hide().prop("required", false).removeAttr("name");
+                        $("#pelanggan_locked").show();
                         $("#txt_pelanggan_display").val(username + " – " + nama);
                         $("#hid_id_pelanggan").val(username);
 
@@ -1068,6 +1116,8 @@ if (isset($_POST['tombol'])) {
                         $("#inp_waktu").val("<?php echo substr($d_edit_m['waktu'], 0, 5); ?>");
                         $("#inp_meter_awal").val("<?php echo $d_edit_m['meter_awal']; ?>");
                         $("#inp_meter_akhir").val("<?php echo $d_edit_m['meter_akhir']; ?>");
+                        $("#btn_meter_submit").attr("value", "meter_edit");
+                        $("#btn_meter_submit").html("<i class='fas fa-save me-1'></i> Simpan Perubahan");
 
                         // Scroll ke form
                         $('html, body').animate({ scrollTop: $("#catat_meter_add").offset().top - 80 }, 400);
@@ -1154,46 +1204,6 @@ if (isset($_POST['tombol'])) {
 <script>
 $(document).ready(function() {
 
-    // ─── Init DataTable User ─────────────────────────────────────
-    var userDT = $('#user_table').DataTable({
-        language: {
-            search:     "Cari:",
-            lengthMenu: "Tampilkan _MENU_ data per halaman",
-            info:       "Showing _START_ to _END_ of _TOTAL_ entries",
-            infoEmpty:  "Menampilkan 0 data",
-            emptyTable: "Belum ada data user",
-            zeroRecords:"Tidak ada data yang cocok",
-            paginate: { previous: "&laquo;", next: "&raquo;" }
-        },
-        pageLength: 10,
-        dom: 'tip',   // hanya table, info, pagination — search & length kita buat sendiri
-        columnDefs: [
-            { orderable: false, targets: [8] }
-        ]
-    });
-
-    // Update info teks custom
-    function updateUserInfo() {
-        var info = userDT.page.info();
-        $('#user_table_info').text(
-            'Showing ' + (info.recordsDisplay === 0 ? 0 : info.start + 1) +
-            ' to ' + info.end + ' of ' + info.recordsDisplay + ' entries'
-        );
-    }
-    userDT.on('draw', updateUserInfo);
-    updateUserInfo();
-
-    // Search box custom
-    $('#user_search').on('keyup', function() {
-        userDT.search(this.value).draw();
-    });
-
-    // Tombol tambah user toggle form
-    $('#btn_tambah_user').click(function() {
-        $('#user_add').slideToggle();
-        $('html, body').animate({ scrollTop: $('#user_add').offset().top - 80 }, 400);
-    });
-
     // ─── Init DataTable Tarif ────────────────────────────────────
     $('#tarif_table').DataTable({
         language: {
@@ -1226,6 +1236,15 @@ $(document).ready(function() {
         columnDefs: [
             { orderable: false, targets: [0, 6] } // kolom No & Aksi tidak bisa di-sort
         ]
+    });
+
+    // ─── Tombol Tambah User toggle form ──────────────────────────
+    $('#btn_tambah_user').click(function() {
+        $('#user_add').slideToggle(300, function() {
+            if ($(this).is(':visible')) {
+                $('html, body').animate({ scrollTop: $('#user_add').offset().top - 80 }, 400);
+            }
+        });
     });
 
     // ─── Tombol Tambah Tarif toggle form ─────────────────────────
