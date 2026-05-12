@@ -314,17 +314,17 @@ if (isset($_POST['tombol'])) {
                             <div class="sb-nav-link-icon"><i class="fas fa-users text-info"></i></div>
                             Manajemen User
                         </a>
-                        <a class="nav-link" href="index.php?p=pemakaian_warga">
+                        <a class="nav-link" href="index.php?p=tarif">
+                            <div class="sb-nav-link-icon"><i class="fas fa-tags text-warning"></i></div>
+                            Manajemen Tarif
+                        </a>
+                        <a class="nav-link" href="index.php?p=catat_meter">
                             <div class="sb-nav-link-icon"><i class="fas fa-tint text-primary"></i></div>
                             Lihat Pemakaian Warga
                         </a>
                         <a class="nav-link" href="index.php?p=pembayaran_warga">
                             <div class="sb-nav-link-icon"><i class="fas fa-money-bill text-success"></i></div>
                             Pembayaran Warga
-                        </a>
-                        <a class="nav-link" href="index.php?p=ubah_datameter_warga">
-                            <div class="sb-nav-link-icon"><i class="fas fa-edit text-warning"></i></div>
-                            Ubah Datameter Warga
                         </a>
 
                     <?php elseif ($level === "bendahara") : ?>
@@ -789,7 +789,7 @@ if (isset($_POST['tombol'])) {
                     </div>
                 </div>
 
-                <div class="card mb-4 shadow-sm" id="tarif_list" style="border-top: 4px solid #1cc88a; border-radius: 0.5rem;">
+                <div class="card mb-4 shadow-sm" id="tarif_list" style="display:<?php echo (in_array($page, ['tarif', 'tarif_edit'])) ? 'block' : 'none'; ?>; border-top: 4px solid #1cc88a; border-radius: 0.5rem;">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8fff8 0%, #e8f5e9 100%);">
                         <div class="d-flex align-items-center gap-2">
                             <div style="background:#1cc88a;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
@@ -1018,7 +1018,7 @@ if (isset($_POST['tombol'])) {
                                     <td>";
 
                                 // Logika tombol aksi: admin/bendahara selalu bisa, petugas hanya <= 30 hari
-                                $level_login = strtolower(trim($_SESSION['level'] ?? ''));
+                                $level_login = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
                                 if ($level_login == 'admin' || $level_login == 'bendahara' || $selisih <= 30) {
                                     echo "
                                         <a href='index.php?p=meter_edit&id=$id_r'><button type='button' class='btn btn-outline-warning btn-sm'>Edit</button></a>
@@ -1106,6 +1106,19 @@ if (isset($_POST['tombol'])) {
                     $id_edit_m = (int) $_GET['id'];
                     $q_edit_m  = mysqli_query($koneksi, "SELECT p.*, l.nama FROM pemakaian p LEFT JOIN login l ON l.username = p.username WHERE p.no='$id_edit_m'");
                     $d_edit_m  = mysqli_fetch_assoc($q_edit_m);
+                    // Guard: petugas hanya boleh edit data <= 30 hari, admin bebas
+                    if ($d_edit_m) {
+                        $level_guard = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
+                        if ($level_guard === 'petugas') {
+                            $tgl_guard  = date_create($d_edit_m['tgl'] ?? '');
+                            $diff_guard = $tgl_guard ? date_diff($tgl_guard, date_create())->days : 0;
+                            if ($diff_guard > 30) {
+                                $_SESSION['notif'] = ['type' => 'warning', 'msg' => 'Akses ditolak. Data lebih dari 30 hari tidak dapat diedit.'];
+                                header("Location: index.php?p=catat_meter");
+                                exit;
+                            }
+                        }
+                    }
                     if ($d_edit_m) { ?>
                     <script>
                     $(document).ready(function(){
