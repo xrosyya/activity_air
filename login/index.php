@@ -31,8 +31,11 @@ $dt_user = [
 $level = strtolower(trim($_SESSION['level'] ?? ($dt_user_row['level'] ?? '')));
 
 // Routing halaman
-$e  = explode("=", $_SERVER['REQUEST_URI']);
-$page = $e[1] ?? '';
+$page = isset($_GET['p']) ? trim($_GET['p']) : '';
+// Bersihkan jika ada sisa parameter lain (misal: catat_tarif_edit&id jadi catat_tarif_edit)
+if (strpos($page, '&') !== false) {
+    $page = explode('&', $page)[0];
+}
 
 $h1 = "Dashboard";
 $li = "Dashboard";
@@ -195,6 +198,7 @@ if (isset($_POST['tombol'])) {
         header("Location: index.php?p=catat_meter");
         exit;
     }
+
 }
 ?>
 
@@ -247,6 +251,7 @@ if (isset($_POST['tombol'])) {
                 background: #eaecf4 !important; border-color: #4e73df !important;
                 color: #4e73df !important; border-radius: 6px;
             }
+
         </style>
     </head>
     <body class="sb-nav-fixed">
@@ -918,7 +923,7 @@ if (isset($_POST['tombol'])) {
                     </script>
                     <?php } } ?>
 
-                <div class="card mb-4 shadow-sm" id="catat_meter_list" style="display:none; border-top: 4px solid #4e73df; border-radius: 0.5rem;">
+                <div class="card mb-4 shadow-sm" id="catat_meter_list" style="display:<?php echo (in_array($page, ['catat_meter', 'meter_edit'])) ? 'block' : 'none'; ?>; border-top: 4px solid #4e73df; border-radius: 0.5rem;">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8f9ff 0%, #eaecf4 100%);">
                         <div class="d-flex align-items-center gap-2">
                             <div style="background:#4e73df;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
@@ -945,16 +950,16 @@ if (isset($_POST['tombol'])) {
                             unset($_SESSION['notif']);
                         }
                         ?>
-                        <table id="meter_table" class="table table-hover align-middle w-100" style="font-size:0.95rem;">
-                            <thead style="background:#eaecf4;">
+                        <table id="meter_table">
+                            <thead>
                                 <tr>
-                                    <th class="text-secondary fw-semibold" style="width:50px;">No</th>
-                                    <th class="text-secondary fw-semibold">Nama</th>
-                                    <th class="text-secondary fw-semibold text-center">Tanggal & Waktu</th>
-                                    <th class="text-secondary fw-semibold text-center">Meter Awal</th>
-                                    <th class="text-secondary fw-semibold text-center">Meter Akhir</th>
-                                    <th class="text-secondary fw-semibold text-center">Pemakaian (m³)</th>
-                                    <th class="text-secondary fw-semibold text-center">Aksi</th>
+                                    <th>No</th>
+                                    <th>Nama</th>
+                                    <th>Tanggal &amp; Waktu</th>
+                                    <th>Meter Awal</th>
+                                    <th>Meter Akhir</th>
+                                    <th>Pemakaian (m³)</th>
+                                    <th>Aksi</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -988,21 +993,17 @@ if (isset($_POST['tombol'])) {
                                 $tgl_waktu = $tgl_fmt . ' ' . $waktu_fmt;
 
                                 echo "<tr>
-                                    <td class='text-muted'>$no_m</td>
+                                    <td>$no_m</td>
                                     <td>$nama_p</td>
-                                    <td class='text-center'>$tgl_waktu</td>
-                                    <td class='text-center'>$m_awal</td>
-                                    <td class='text-center'>$m_akhir</td>
-                                    <td class='text-center fw-semibold text-primary'>$pakai m³</td>
-                                    <td class='text-center'>
-                                        <a href='index.php?p=meter_edit&id=$id_r' class='btn btn-sm btn-warning me-1' style='min-width:70px;'>
-                                            <i class='fas fa-edit me-1'></i>Ubah
-                                        </a>
-                                        <button type='button' class='btn btn-sm btn-danger' style='min-width:70px;'
+                                    <td>$tgl_waktu</td>
+                                    <td>$m_awal</td>
+                                    <td>$m_akhir</td>
+                                    <td>$pakai m³</td>
+                                    <td>
+                                        <a href='index.php?p=meter_edit&id=$id_r'><button type='button' class='btn btn-outline-warning btn-sm'>Edit</button></a>
+                                        <button type='button' class='btn btn-outline-danger btn-sm'
                                             data-bs-toggle='modal' data-bs-target='#myModalMeter'
-                                            data-id_meter='$id_r' data-id_pelanggan='$id_p'>
-                                            <i class='fas fa-trash me-1'></i>Hapus
-                                        </button>
+                                            data-id_meter='$id_r' data-id_pelanggan='$id_p'>Hapus</button>
                                     </td>
                                 </tr>";
                                 $no_m++;
@@ -1014,80 +1015,63 @@ if (isset($_POST['tombol'])) {
                     </div>
                 </div>
 
-                <div id="catat_meter_add" class="card mb-4" style="display: none; border-top: 4px solid #4e73df; box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,0.15);">
-                    <div class="card-header bg-white py-3">
-                        <h5 class="m-0 fw-bold text-primary">
-                            <i class="fas fa-plus-circle me-2"></i> Form Catat Meter Air
-                        </h5>
+                <div id="catat_meter_add" class="card mb-4" style="display: none;">
+                    <div class="card-header">
+                        <i class="fas fa-tachometer-alt fa-fade me-1" style="color: rgb(99, 230, 190);"></i>
+                        Meter
                     </div>
-                    <div class="card-body px-4 py-4">
+                    <div class="card-body">
                         <form id="meter_form" method="POST" action="index.php">
                             <input type="hidden" name="id_meter" id="form_id_meter" value="">
+                            <input type="hidden" name="tgl" id="inp_tgl" value="<?php echo date('Y-m-d'); ?>">
+                            <input type="hidden" name="waktu" id="inp_waktu" value="<?php echo date('H:i'); ?>">
 
-                            <div class="row mb-3 align-items-center">
-                                <label class="col-md-3 col-form-label fw-bold fs-6">ID Pelanggan</label>
-                                <div class="col-md-9">
-                                    <!-- Dropdown: tampil saat mode tambah -->
-                                    <select class="form-select form-select-lg" name="id_pelanggan" id="sel_id_pelanggan" required>
-                                        <option value="">-- Pilih Pelanggan --</option>
+                            <div class="mb-3">
+                                <label class="form-label">Nama Warga:</label>
+                                <?php if ($page == 'meter_edit' && isset($_GET['id'])): ?>
+                                    <?php
+                                    // Ambil data untuk mode edit
+                                    $id_cek_m = (int) $_GET['id'];
+                                    $q_cek_m  = mysqli_query($koneksi, "SELECT p.username, l.nama FROM pemakaian p LEFT JOIN login l ON l.username = p.username WHERE p.no='$id_cek_m' LIMIT 1");
+                                    $d_cek_m  = mysqli_fetch_assoc($q_cek_m);
+                                    $locked_username = htmlspecialchars($d_cek_m['username'] ?? '');
+                                    $locked_nama     = htmlspecialchars($d_cek_m['nama'] ?? $d_cek_m['username'] ?? '');
+                                    ?>
+                                    <!-- Mode edit: nama terkunci, tidak bisa diubah -->
+                                    <input type="text" class="form-control bg-light" value="<?php echo $locked_nama; ?>" readonly>
+                                    <input type="hidden" name="id_pelanggan" value="<?php echo $locked_username; ?>">
+                                <?php else: ?>
+                                    <!-- Mode tambah: dropdown pilih warga -->
+                                    <select class="form-select" name="id_pelanggan" id="sel_id_pelanggan" required>
+                                        <option value="">-- Pilih Warga --</option>
                                         <?php
                                         $qwarga = mysqli_query($koneksi, "SELECT username, nama FROM login WHERE LOWER(level)='warga' AND UPPER(status)='AKTIF' ORDER BY nama ASC");
                                         while ($dw = mysqli_fetch_assoc($qwarga)) {
                                             $uname  = htmlspecialchars($dw['username']);
                                             $nwarga = htmlspecialchars($dw['nama']);
-                                            echo "<option value='$uname'>$uname – $nwarga</option>";
+                                            echo "<option value='$uname'>$nwarga</option>";
                                         }
                                         ?>
                                     </select>
-                                    <!-- Tampil saat mode edit: teks terkunci + hidden input -->
-                                    <div id="pelanggan_locked" style="display:none;">
-                                        <input type="text" class="form-control form-control-lg bg-light text-muted" id="txt_pelanggan_display" readonly>
-                                        <input type="hidden" name="id_pelanggan" id="hid_id_pelanggan">
-                                    </div>
-                                </div>
+                                <?php endif; ?>
                             </div>
 
-                            <div class="row mb-3 align-items-center">
-                                <label class="col-md-3 col-form-label fw-bold fs-6">Tanggal</label>
-                                <div class="col-md-9">
-                                    <input type="date" class="form-control form-control-lg" name="tgl" id="inp_tgl"
-                                        value="<?php echo date('Y-m-d'); ?>" required>
-                                </div>
+                            <div class="mb-3">
+                                <label class="form-label">Meter Awal (m³):</label>
+                                <input type="number" class="form-control" name="meter_awal" id="inp_meter_awal"
+                                    placeholder="0" min="0" step="0.01" required>
                             </div>
 
-                            <div class="row mb-3 align-items-center">
-                                <label class="col-md-3 col-form-label fw-bold fs-6">Waktu</label>
-                                <div class="col-md-9">
-                                    <input type="time" class="form-control form-control-lg" name="waktu" id="inp_waktu"
-                                        value="<?php echo date('H:i'); ?>" required>
-                                </div>
+                            <div class="mb-3">
+                                <label class="form-label">Meter Akhir (m³):</label>
+                                <input type="number" class="form-control" name="meter_akhir" id="inp_meter_akhir"
+                                    placeholder="0" min="0" step="0.01" required>
                             </div>
 
-                            <div class="row mb-3 align-items-center">
-                                <label class="col-md-3 col-form-label fw-bold fs-6">Meter Awal (m³)</label>
-                                <div class="col-md-9">
-                                    <input type="number" class="form-control form-control-lg" name="meter_awal" id="inp_meter_awal"
-                                        placeholder="Angka meter awal" min="0" step="0.01" required>
-                                </div>
-                            </div>
-
-                            <div class="row mb-3 align-items-center">
-                                <label class="col-md-3 col-form-label fw-bold fs-6">Meter Akhir (m³)</label>
-                                <div class="col-md-9">
-                                    <input type="number" class="form-control form-control-lg" name="meter_akhir" id="inp_meter_akhir"
-                                        placeholder="Angka meter akhir" min="0" step="0.01" required>
-                                </div>
-                            </div>
-
-                            <hr>
-                            <div class="d-flex justify-content-end gap-2 mt-3">
-                                <a href="index.php?p=catat_meter" class="btn btn-secondary btn-lg px-4">
-                                    <i class="fas fa-arrow-left me-1"></i> Batal
-                                </a>
-                                <button type="submit" class="btn btn-primary btn-lg px-5" name="tombol" id="btn_meter_submit" value="meter_add">
-                                    <i class="fas fa-save me-1"></i> Simpan Data
-                                </button>
-                            </div>
+                            <button type="submit" class="btn btn-primary" name="tombol" id="btn_meter_submit" value="meter_add">
+                                Simpan
+                            </button>
+                            <a href="index.php?p=catat_meter" class="btn btn-secondary ms-2">Batal</a>
                         </form>
                     </div>
                 </div>
@@ -1103,27 +1087,21 @@ if (isset($_POST['tombol'])) {
                     $(document).ready(function(){
                         $("#catat_meter_add").show();
                         $("#form_id_meter").val("<?php echo $d_edit_m['no']; ?>");
-
-                        // Sembunyikan dropdown, tampilkan teks terkunci
-                        var username = "<?php echo htmlspecialchars($d_edit_m['username']); ?>";
-                        var nama     = "<?php echo htmlspecialchars($d_edit_m['nama'] ?? $d_edit_m['username']); ?>";
-                        $("#sel_id_pelanggan").hide().prop("required", false).removeAttr("name");
-                        $("#pelanggan_locked").show();
-                        $("#txt_pelanggan_display").val(username + " – " + nama);
-                        $("#hid_id_pelanggan").val(username);
-
                         $("#inp_tgl").val("<?php echo $d_edit_m['tgl']; ?>");
                         $("#inp_waktu").val("<?php echo substr($d_edit_m['waktu'], 0, 5); ?>");
                         $("#inp_meter_awal").val("<?php echo $d_edit_m['meter_awal']; ?>");
                         $("#inp_meter_akhir").val("<?php echo $d_edit_m['meter_akhir']; ?>");
-                        $("#btn_meter_submit").attr("value", "meter_edit");
-                        $("#btn_meter_submit").html("<i class='fas fa-save me-1'></i> Simpan Perubahan");
-
-                        // Scroll ke form
+                        $("#btn_meter_submit").attr("value", "meter_edit").text("Simpan Perubahan");
                         $('html, body').animate({ scrollTop: $("#catat_meter_add").offset().top - 80 }, 400);
                     });
                     </script>
                     <?php } } ?>
+
+
+
+                <?php
+                // Mode Edit catat tarif: isi form dari DB — dihapus (fitur Catat Tarif dinonaktifkan)
+                ?>
 
 
             </div>
@@ -1175,6 +1153,8 @@ if (isset($_POST['tombol'])) {
             </div>
         </div>
 
+
+
         <footer class="py-4 bg-light mt-auto">
             <div class="container-fluid px-4">
                 <div class="d-flex align-items-center justify-content-between small">
@@ -1221,22 +1201,21 @@ $(document).ready(function() {
         ]
     });
 
-    // ─── Init DataTable Catat Meter ──────────────────────────────
-    $('#meter_table').DataTable({
-        language: {
-            search:     "Cari:",
-            lengthMenu: "Tampilkan _MENU_ data per halaman",
-            info:       "Menampilkan _START_ s/d _END_ dari _TOTAL_ data",
-            infoEmpty:  "Menampilkan 0 data",
-            emptyTable: "Belum ada data meter", // Ditambahkan agar otomatis tampil jika kosong
-            zeroRecords:"Tidak ada data yang cocok",
-            paginate: { previous: "&laquo;", next: "&raquo;" }
-        },
-        pageLength: 10,
-        columnDefs: [
-            { orderable: false, targets: [0, 6] } // kolom No & Aksi tidak bisa di-sort
-        ]
-    });
+    // ─── Init simple-datatables Catat Meter ─────────────────────
+    if (document.getElementById('meter_table')) {
+        const meterDT = new simpleDatatables.DataTable('#meter_table', {
+            searchable: true,
+            fixedHeight: false,
+            perPage: 10,
+            labels: {
+                placeholder: "Cari...",
+                perPage: "Tampilkan {select} data per halaman",
+                noRows: "Belum ada data meter",
+                info: "Menampilkan {start} s/d {end} dari {rows} data",
+                noResults: "Tidak ada data yang cocok"
+            }
+        });
+    }
 
     // ─── Tombol Tambah User toggle form ──────────────────────────
     $('#btn_tambah_user').click(function() {
@@ -1269,6 +1248,7 @@ $(document).ready(function() {
         $(this).find('#modal_id_meter_hidden').val(id_m);
         $(this).find('#modal_id_meter_text').text(id_p);
     });
+
 
 });
 </script>
