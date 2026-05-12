@@ -132,6 +132,13 @@ if (isset($_POST['tombol'])) {
         $m_akhir = mysqli_real_escape_string($koneksi, trim($_POST['meter_akhir']));
         $pakai   = $m_akhir - $m_awal;
 
+        // Validasi: meter akhir harus lebih besar dari meter awal
+        if ((float)$m_akhir <= (float)$m_awal) {
+            $_SESSION['notif'] = ['type' => 'warning', 'msg' => "Meter akhir harus lebih besar dari meter awal."];
+            header("Location: index.php?p=catat_meter");
+            exit;
+        }
+
         // Ambil tarif aktif pelanggan
         $q_tarif = mysqli_query($koneksi, "SELECT t.tarif, t.id_tarif FROM tarif t 
                                             JOIN login l ON l.kd_tarif = t.id_tarif 
@@ -140,18 +147,12 @@ if (isset($_POST['tombol'])) {
         $kd_tarif = $d_tarif['id_tarif'] ?? '';
         $tagihan  = $pakai * ($d_tarif['tarif'] ?? 0);
 
-        // Cek apakah sudah dicatat pada tanggal yang sama
-        $cek = mysqli_query($koneksi, "SELECT no FROM pemakaian WHERE username='$id_pel' AND tgl='$tgl'");
-        if (mysqli_num_rows($cek) > 0) {
-            $_SESSION['notif'] = ['type' => 'warning', 'msg' => "Pelanggan sudah dicatat pada tanggal tersebut."];
+        mysqli_query($koneksi, "INSERT INTO pemakaian (username, meter_awal, meter_akhir, pemakaian, tgl, waktu, kd_tarif, tagihan, status) 
+                                VALUES ('$id_pel', '$m_awal', '$m_akhir', '$pakai', '$tgl', '$waktu', '$kd_tarif', '$tagihan', 'BELUM BAYAR')");
+        if (mysqli_affected_rows($koneksi) > 0) {
+            $_SESSION['notif'] = ['type' => 'success', 'msg' => "Data meter berhasil disimpan."];
         } else {
-            mysqli_query($koneksi, "INSERT INTO pemakaian (username, meter_awal, meter_akhir, pemakaian, tgl, waktu, kd_tarif, tagihan, status) 
-                                    VALUES ('$id_pel', '$m_awal', '$m_akhir', '$pakai', '$tgl', '$waktu', '$kd_tarif', '$tagihan', 'BELUM BAYAR')");
-            if (mysqli_affected_rows($koneksi) > 0) {
-                $_SESSION['notif'] = ['type' => 'success', 'msg' => "Data meter berhasil disimpan."];
-            } else {
-                $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal menyimpan data: " . mysqli_error($koneksi)];
-            }
+            $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal menyimpan data: " . mysqli_error($koneksi)];
         }
         header("Location: index.php?p=catat_meter");
         exit;
@@ -166,6 +167,13 @@ if (isset($_POST['tombol'])) {
         $m_awal  = mysqli_real_escape_string($koneksi, trim($_POST['meter_awal']));
         $m_akhir = mysqli_real_escape_string($koneksi, trim($_POST['meter_akhir']));
         $pakai   = $m_akhir - $m_awal;
+
+        // Validasi: meter akhir harus lebih besar dari meter awal
+        if ((float)$m_akhir <= (float)$m_awal) {
+            $_SESSION['notif'] = ['type' => 'warning', 'msg' => "Meter akhir harus lebih besar dari meter awal."];
+            header("Location: index.php?p=catat_meter");
+            exit;
+        }
 
         $q_tarif = mysqli_query($koneksi, "SELECT t.tarif, t.id_tarif FROM tarif t 
                                             JOIN login l ON l.kd_tarif = t.id_tarif 
@@ -342,7 +350,7 @@ if (isset($_POST['tombol'])) {
                             <div class="sb-nav-link-icon"><i class="fas fa-plus-circle text-success"></i></div>
                             Catat Meter
                         </a>
-                        <a class="nav-link" href="index.php?p=mengubah_datameter_air_warga_dalam_satu_bulan">
+                        <!-- <a class="nav-link" href="index.php?p=mengubah_datameter_air_warga_dalam_satu_bulan">
                             <div class="sb-nav-link-icon"><i class="fas fa-edit text-warning"></i></div>
                             Mengubah Datameter Air Warga Dalam Satu Bulan
                         </a>
@@ -356,7 +364,7 @@ if (isset($_POST['tombol'])) {
                         </a>
                         <a class="nav-link" href="index.php?p=melihat_infografis_pemakaian_air_warga">
                             <div class="sb-nav-link-icon"><i class="fas fa-chart-line text-danger"></i></div>
-                            Melihat Infografis Pemakaian Air Warga
+                            Melihat Infografis Pemakaian Air Warga -->
                         </a>
 
                     <?php elseif ($level === "warga") : ?>
@@ -981,16 +989,24 @@ if (isset($_POST['tombol'])) {
                                 $m_awal  = $dm['meter_awal'];
                                 $m_akhir = $dm['meter_akhir'];
                                 $pakai   = $dm['pemakaian'];
-                                // Format tanggal: Y-m-d -> d-m-Y
-                                $tgl_raw   = $dm['tgl'] ?? '';
-                                $tgl_fmt   = $tgl_raw ? date('d-m-Y', strtotime($tgl_raw)) : '-';
 
-                                // Ambil hanya HH:MM:SS dari kolom waktu (potong jika ada karakter lain)
+                                // Format tanggal: Y-m-d -> d-m-Y
+                                $tgl_raw = $dm['tgl'] ?? '';
+                                $tgl_fmt = $tgl_raw ? date('d-m-Y', strtotime($tgl_raw)) : '-';
+
+                                // Waktu
                                 $waktu_raw = $dm['waktu'] ?? '';
                                 preg_match('/\d{2}:\d{2}(:\d{2})?/', $waktu_raw, $wm);
                                 $waktu_fmt = isset($wm[0]) ? $wm[0] : '-';
 
-                                $tgl_waktu = $tgl_fmt . ' ' . $waktu_fmt;
+                                // Hitung selisih hari seperti index2
+                                $tgl_tabel    = date_create($tgl_raw);
+                                $tgl_sekarang = date_create();
+                                $diff         = date_diff($tgl_tabel, $tgl_sekarang);
+                                $selisih      = $diff ? $diff->days : 0;
+
+                                // Format: 12-05-2026 17:28:59 | 2026-05-12 0 hari
+                                $tgl_waktu = "$tgl_fmt $waktu_fmt | " . date("Y-m-d") . " $selisih hari";
 
                                 echo "<tr>
                                     <td>$no_m</td>
@@ -999,13 +1015,21 @@ if (isset($_POST['tombol'])) {
                                     <td>$m_awal</td>
                                     <td>$m_akhir</td>
                                     <td>$pakai m³</td>
-                                    <td>
+                                    <td>";
+
+                                // Logika tombol aksi: admin/bendahara selalu bisa, petugas hanya <= 30 hari
+                                $level_login = strtolower(trim($_SESSION['level'] ?? ''));
+                                if ($level_login == 'admin' || $level_login == 'bendahara' || $selisih <= 30) {
+                                    echo "
                                         <a href='index.php?p=meter_edit&id=$id_r'><button type='button' class='btn btn-outline-warning btn-sm'>Edit</button></a>
                                         <button type='button' class='btn btn-outline-danger btn-sm'
                                             data-bs-toggle='modal' data-bs-target='#myModalMeter'
                                             data-id_meter='$id_r' data-id_pelanggan='$id_p'>Hapus</button>
-                                    </td>
-                                </tr>";
+                                    ";
+                                }
+                                // petugas + > 30 hari: kolom aksi kosong
+
+                                echo "</td></tr>";
                                 $no_m++;
                             }
                                 
