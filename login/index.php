@@ -212,7 +212,7 @@ if (isset($_POST['tombol'])) {
         $waktu   = mysqli_real_escape_string($koneksi, trim($_POST['waktu']));
         $m_awal  = mysqli_real_escape_string($koneksi, trim($_POST['meter_awal']));
         $m_akhir = mysqli_real_escape_string($koneksi, trim($_POST['meter_akhir']));
-        $pakai   = $m_akhir - $m_awal;
+        $pakai   = (float)$m_akhir - (float)$m_awal;
 
         // Validasi: meter akhir harus lebih besar dari meter awal
         if ((float)$m_akhir <= (float)$m_awal) {
@@ -224,10 +224,15 @@ if (isset($_POST['tombol'])) {
         // Ambil tarif aktif pelanggan
         $q_tarif = mysqli_query($koneksi, "SELECT t.tarif, t.id_tarif FROM tarif t 
                                             JOIN login l ON LOWER(l.tipe) = LOWER(t.tipe) 
-                                            WHERE l.username = '$id_pel' AND t.status='AKTIF' LIMIT 1");
-        $d_tarif  = mysqli_fetch_assoc($q_tarif);
+                                            WHERE l.username = '$id_pel' AND LOWER(t.status)='aktif' LIMIT 1");
+        $d_tarif = mysqli_fetch_assoc($q_tarif);
+        // Fallback: ambil tarif pertama yang aktif jika tidak ketemu by tipe
+        if (!$d_tarif) {
+            $q_tarif2 = mysqli_query($koneksi, "SELECT tarif, id_tarif FROM tarif WHERE LOWER(status)='aktif' LIMIT 1");
+            $d_tarif  = mysqli_fetch_assoc($q_tarif2);
+        }
         $kd_tarif = $d_tarif['id_tarif'] ?? '';
-        $tagihan  = $pakai * ($d_tarif['tarif'] ?? 0);
+        $tagihan  = (float)$pakai * (float)($d_tarif['tarif'] ?? 0);
 
         mysqli_query($koneksi, "INSERT INTO pemakaian (username, meter_awal, meter_akhir, pemakaian, tgl, waktu, kd_tarif, tagihan, status) 
                                 VALUES ('$id_pel', '$m_awal', '$m_akhir', '$pakai', '$tgl', '$waktu', '$kd_tarif', '$tagihan', 'BELUM BAYAR')");
@@ -248,31 +253,38 @@ if (isset($_POST['tombol'])) {
         $waktu   = mysqli_real_escape_string($koneksi, trim($_POST['waktu']));
         $m_awal  = mysqli_real_escape_string($koneksi, trim($_POST['meter_awal']));
         $m_akhir = mysqli_real_escape_string($koneksi, trim($_POST['meter_akhir']));
-        $pakai   = $m_akhir - $m_awal;
+        $pakai   = (float)$m_akhir - (float)$m_awal;
+        $status  = mysqli_real_escape_string($koneksi, trim($_POST['status'] ?? 'BELUM BAYAR'));
+        $dari    = mysqli_real_escape_string($koneksi, trim($_POST['dari'] ?? ''));
 
         // Validasi: meter akhir harus lebih besar dari meter awal
         if ((float)$m_akhir <= (float)$m_awal) {
             $_SESSION['notif'] = ['type' => 'warning', 'msg' => "Meter akhir harus lebih besar dari meter awal."];
-            header("Location: index.php?p=catat_meter");
+            header("Location: index.php?p=" . ($dari ?: 'catat_meter'));
             exit;
         }
 
         $q_tarif = mysqli_query($koneksi, "SELECT t.tarif, t.id_tarif FROM tarif t 
-                                            JOIN login l ON l.kd_tarif = t.id_tarif 
-                                            WHERE l.username = '$id_pel' AND t.status='AKTIF' LIMIT 1");
-        $d_tarif  = mysqli_fetch_assoc($q_tarif);
+                                            JOIN login l ON LOWER(l.tipe) = LOWER(t.tipe) 
+                                            WHERE l.username = '$id_pel' AND LOWER(t.status)='aktif' LIMIT 1");
+        $d_tarif = mysqli_fetch_assoc($q_tarif);
+        // Fallback: ambil tarif pertama yang aktif jika tidak ketemu by tipe
+        if (!$d_tarif) {
+            $q_tarif2 = mysqli_query($koneksi, "SELECT tarif, id_tarif FROM tarif WHERE LOWER(status)='aktif' LIMIT 1");
+            $d_tarif  = mysqli_fetch_assoc($q_tarif2);
+        }
         $kd_tarif = $d_tarif['id_tarif'] ?? '';
-        $tagihan  = $pakai * ($d_tarif['tarif'] ?? 0);
+        $tagihan  = (float)$pakai * (float)($d_tarif['tarif'] ?? 0);
 
         mysqli_query($koneksi, "UPDATE pemakaian SET username='$id_pel', meter_awal='$m_awal', meter_akhir='$m_akhir', 
-                                pemakaian='$pakai', tgl='$tgl', waktu='$waktu', kd_tarif='$kd_tarif', tagihan='$tagihan' 
+                                pemakaian='$pakai', tgl='$tgl', waktu='$waktu', kd_tarif='$kd_tarif', tagihan='$tagihan', status='$status' 
                                 WHERE no='$id_rec'");
         if (mysqli_affected_rows($koneksi) >= 0) {
             $_SESSION['notif'] = ['type' => 'success', 'msg' => "Data meter berhasil diperbarui."];
         } else {
             $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal memperbarui: " . mysqli_error($koneksi)];
         }
-        header("Location: index.php?p=catat_meter");
+        header("Location: index.php?p=" . ($dari ?: 'catat_meter'));
         exit;
     }
 
@@ -410,21 +422,13 @@ if (isset($_POST['tombol'])) {
                         </a>
 
                     <?php elseif ($level === "bendahara") : ?>
-                        <a class="nav-link" href="index.php?p=transaksi_pembayaran">
-                            <div class="sb-nav-link-icon"><i class="fas fa-money-bill-wave text-success"></i></div>
-                            Transaksi Pembayaran 
-                        </a>
                         <a class="nav-link" href="index.php?p=tarif">
                             <div class="sb-nav-link-icon"><i class="fas fa-tags text-warning"></i></div>
                             Manajemen Tarif
                         </a>
-                        <a class="nav-link" href="index.php?p=lihat_komplain">
-                            <div class="sb-nav-link-icon"><i class="fas fa-comment-dots text-danger"></i></div>
-                            Lihat Komplain
-                        </a>
-                        <a class="nav-link" href="index.php?p=lihat_data_pemakaian">
-                            <div class="sb-nav-link-icon"><i class="fas fa-tint text-info"></i></div>
-                            Lihat Data Pemakaian
+                        <a class="nav-link" href="index.php?p=pemakaian_warga">
+                            <div class="sb-nav-link-icon"><i class="fas fa-tint text-primary"></i></div>
+                            Lihat Pemakaian Warga
                         </a>
 
                     <?php elseif ($level === "petugas") : ?>
@@ -492,7 +496,7 @@ if (isset($_POST['tombol'])) {
                     <?php unset($_SESSION['notif']); ?>
                 <?php endif; ?>
 
-                <div class="row" id="summary">
+                <div class="row" id="summary" <?php echo ($page === 'pemakaian_warga') ? 'style="display:none!important;"' : ''; ?>>
                     <div class="col-xl-3 col-md-6">
                         <div class="card bg-primary text-white mb-4">
                             <div class="card-body">Primary Card</div>
@@ -531,7 +535,7 @@ if (isset($_POST['tombol'])) {
                     </div>
                 </div>
 
-                <div class="row" id="chart">
+                <div class="row" id="chart" <?php echo ($page === 'pemakaian_warga') ? 'style="display:none!important;"' : ''; ?>>
                     <div class="col-xl-6">
                         <div class="card mb-4">
                             <div class="card-header">
@@ -972,13 +976,13 @@ if (isset($_POST['tombol'])) {
                                 <i class="fas fa-tachometer-alt text-white"></i>
                             </div>
                             <div>
-                                <h6 class="m-0 fw-bold text-primary">Data Catat Meter</h6>
-                                <small class="text-muted">Daftar pencatatan meter air warga</small>
+                                <h6 class="m-0 fw-bold text-primary">Data Meter Warga</h6>
+                                <small class="text-muted">Pencatatan Meter Air Warga</small>
                             </div>
                         </div>
                         <?php if ($page !== 'lihat_data_pemakaian'): ?>
                         <button type="button" id="btn_tambah_meter" class="btn btn-primary d-flex align-items-center gap-2" style="border-radius:8px; padding:8px 18px; font-weight:600;">
-                            <i class="fas fa-plus"></i> Catat Meter
+                            <i class="fas fa-plus"></i> Meter
                         </button>
                         <?php endif; ?>
                     </div>
@@ -994,15 +998,25 @@ if (isset($_POST['tombol'])) {
                             unset($_SESSION['notif']);
                         }
                         ?>
+                        <?php
+                        // Cek apakah admin: tampilkan tabel lengkap (seperti pemakaian_warga) 
+                        $level_cm = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
+                        $is_admin_cm = ($level_cm === 'admin');
+                        ?>
                         <table id="meter_table">
                             <thead>
                                 <tr>
                                     <th>No</th>
-                                    <th>Nama</th>
+                                    <th>Nama Warga</th>
+                                    <?php if ($is_admin_cm): ?><th>Tipe</th><?php endif; ?>
                                     <th>Tanggal &amp; Waktu</th>
-                                    <th>Meter Awal</th>
-                                    <th>Meter Akhir</th>
+                                    <th>Meter Awal (m³)</th>
+                                    <th>Meter Akhir (m³)</th>
                                     <th>Pemakaian (m³)</th>
+                                    <?php if ($is_admin_cm): ?>
+                                    <th>Tagihan (Rp)</th>
+                                    <th>Status</th>
+                                    <?php endif; ?>
                                     <?php if ($page !== 'lihat_data_pemakaian'): ?>
                                     <th>Aksi</th>
                                     <?php endif; ?>
@@ -1012,7 +1026,7 @@ if (isset($_POST['tombol'])) {
                                 <?php
                                 $no_m = 1;
                                 $qm = mysqli_query($koneksi, "
-                                    SELECT p.*, l.nama 
+                                    SELECT p.*, l.nama, l.tipe
                                     FROM pemakaian p 
                                     LEFT JOIN login l ON p.username = l.username 
                                     ORDER BY p.tgl DESC, p.username ASC
@@ -1024,9 +1038,13 @@ if (isset($_POST['tombol'])) {
                                 $id_r    = $dm['no'];
                                 $id_p    = htmlspecialchars($dm['username']);
                                 $nama_p  = htmlspecialchars($dm['nama'] ?? $dm['username']);
+                                $tipe_p  = htmlspecialchars($dm['tipe'] ?? '-');
                                 $m_awal  = $dm['meter_awal'];
                                 $m_akhir = $dm['meter_akhir'];
                                 $pakai   = $dm['pemakaian'];
+                                $tagihan_cm = number_format($dm['tagihan'] ?? 0, 0, ',', '');
+                                $status_cm  = $dm['status'] ?? 'BELUM BAYAR';
+                                $badge_cm   = ($status_cm === 'LUNAS') ? 'success' : 'danger';
 
                                 // Format tanggal: Y-m-d -> d-m-Y
                                 $tgl_raw = $dm['tgl'] ?? '';
@@ -1037,7 +1055,7 @@ if (isset($_POST['tombol'])) {
                                 preg_match('/\d{2}:\d{2}(:\d{2})?/', $waktu_raw, $wm);
                                 $waktu_fmt = isset($wm[0]) ? $wm[0] : '-';
 
-                                // Hitung selisih hari seperti index2
+                                // Hitung selisih hari
                                 $tgl_tabel    = date_create($tgl_raw);
                                 $tgl_sekarang = date_create();
                                 $diff         = date_diff($tgl_tabel, $tgl_sekarang);
@@ -1048,19 +1066,25 @@ if (isset($_POST['tombol'])) {
 
                                 echo "<tr>
                                     <td>$no_m</td>
-                                    <td>$nama_p</td>
-                                    <td>$tgl_waktu</td>
+                                    <td>$nama_p</td>";
+                                if ($is_admin_cm) {
+                                    echo "<td>" . strtoupper($tipe_p) . "</td>";
+                                }
+                                echo "  <td>$tgl_waktu</td>
                                     <td>$m_awal</td>
                                     <td>$m_akhir</td>
-                                    <td>$pakai m³</td>";
+                                    <td>$pakai</td>";
+                                if ($is_admin_cm) {
+                                    echo "<td>$tagihan_cm</td>
+                                          <td><span class='badge bg-$badge_cm'>" . ($status_cm === 'LUNAS' ? 'LUNAS' : 'BLM LUNAS') . "</span></td>";
+                                }
 
                                 // Kolom aksi: sembunyikan di halaman lihat_data_pemakaian
                                 if ($page !== 'lihat_data_pemakaian') {
                                     echo "<td>";
-                                    $level_login = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
-                                    if ($level_login == 'admin' || $level_login == 'bendahara' || $selisih <= 30) {
+                                    if ($is_admin_cm || $level_cm == 'bendahara' || $selisih <= 30) {
                                         echo "
-                                            <a href='index.php?p=meter_edit&id=$id_r'><button type='button' class='btn btn-outline-warning btn-sm'>Edit</button></a>
+                                            <a href='index.php?p=meter_edit&id=$id_r'><button type='button' class='btn btn-outline-warning btn-sm'>Ubah</button></a>
                                             <button type='button' class='btn btn-outline-danger btn-sm'
                                                 data-bs-toggle='modal' data-bs-target='#myModalMeter'
                                                 data-id_meter='$id_r' data-id_pelanggan='$id_p'>Hapus</button>
@@ -1140,11 +1164,29 @@ if (isset($_POST['tombol'])) {
                                     value="<?php echo $edit_m ? htmlspecialchars($edit_m['meter_akhir']) : ''; ?>">
                             </div>
 
+                            <?php if ($edit_m): ?>
+                            <div class="mb-3">
+                                <label class="form-label">Status:</label><br>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="status" id="status_lunas" value="LUNAS"
+                                        <?php echo (($edit_m['status'] ?? '') === 'LUNAS') ? 'checked' : ''; ?>>
+                                    <label class="form-check-label" for="status_lunas">LUNAS</label>
+                                </div>
+                                <div class="form-check form-check-inline">
+                                    <input class="form-check-input" type="radio" name="status" id="status_blm" value="BELUM BAYAR"
+                                        <?php echo (($edit_m['status'] ?? '') !== 'LUNAS') ? 'checked' : ''; ?>>
+                                    <label class="form-check-label" for="status_blm">BLM LUNAS</label>
+                                </div>
+                            </div>
+                            <?php endif; ?>
+
+                            <input type="hidden" name="dari" value="<?php echo isset($_GET['dari']) ? htmlspecialchars($_GET['dari']) : ''; ?>">
+
                             <button type="submit" class="btn btn-primary" name="tombol" id="btn_meter_submit"
                                 value="<?php echo $edit_m ? 'meter_edit' : 'meter_add'; ?>">
                                 <?php echo $edit_m ? 'Simpan Perubahan' : 'Simpan'; ?>
                             </button>
-                            <a href="index.php?p=catat_meter" class="btn btn-secondary ms-2">Batal</a>
+                            <a href="index.php?p=<?php echo (isset($_GET['dari']) && $_GET['dari'] === 'pemakaian_warga') ? 'pemakaian_warga' : 'catat_meter'; ?>" class="btn btn-secondary ms-2">Batal</a>
                         </form>
                     </div>
                 </div>
@@ -1166,6 +1208,79 @@ if (isset($_POST['tombol'])) {
                 // Mode Edit catat tarif: isi form dari DB — dihapus (fitur Catat Tarif dinonaktifkan)
                 ?>
 
+                <!-- PEMAKAIAN WARGA (khusus bendahara) -->
+                <div class="card mb-4 shadow-sm" id="pemakaian_warga_list" style="display:<?php echo ($page === 'pemakaian_warga') ? 'block' : 'none'; ?>; border-top: 4px solid #1cc88a; border-radius: 0.5rem;">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8f9ff 0%, #eaecf4 100%);">
+                        <div class="d-flex align-items-center gap-2">
+                            <div style="background:#1cc88a;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                                <i class="fas fa-tint text-white"></i>
+                            </div>
+                            <div>
+                                <h6 class="m-0 fw-bold text-success">Data Meter Warga</h6>
+                                <small class="text-muted">Pencatatan Meter Air Warga</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <table id="pemakaian_warga_table" style="width:100%">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Nama Warga</th>
+                                    <th>Tipe</th>
+                                    <th>Tanggal &amp; Waktu</th>
+                                    <th>Meter Awal (m³)</th>
+                                    <th>Meter Akhir (m³)</th>
+                                    <th>Pemakaian (m³)</th>
+                                    <th>Tagihan (Rp)</th>
+                                    <th>Status</th>
+                                    <th>Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if ($page === 'pemakaian_warga'):
+                                    $qpw = mysqli_query($koneksi, "
+                                        SELECT p.*, l.nama, l.tipe
+                                        FROM pemakaian p
+                                        LEFT JOIN login l ON p.username = l.username
+                                        ORDER BY p.tgl DESC, p.username ASC
+                                    ");
+                                    while ($dpw = mysqli_fetch_assoc($qpw)):
+                                        $nama_pw  = htmlspecialchars($dpw['nama'] ?? $dpw['username']);
+                                        $tipe_pw  = htmlspecialchars($dpw['tipe'] ?? '-');
+                                        $tgl_pw   = $dpw['tgl'] ? date('d-m-Y', strtotime($dpw['tgl'])) : '-';
+                                        preg_match('/\d{2}:\d{2}(:\d{2})?/', $dpw['waktu'] ?? '', $wm2);
+                                        $waktu_pw = $wm2[0] ?? '-';
+                                        $tgl_now2 = date_create($dpw['tgl']);
+                                        $diff2    = $tgl_now2 ? date_diff($tgl_now2, date_create()) : null;
+                                        $hari_pw  = $diff2 ? $diff2->days : 0;
+                                        $tglwaktu_pw = "$tgl_pw $waktu_pw | " . date("Y-m-d") . " $hari_pw hari";
+                                        $tagihan_pw  = number_format($dpw['tagihan'] ?? 0, 0, ',', '');
+                                        $status_pw   = $dpw['status'] ?? 'BELUM BAYAR';
+                                        $badge_pw    = ($status_pw === 'LUNAS') ? 'success' : 'danger';
+                                        $id_pw       = (int)$dpw['no'];
+                                        $id_user_pw  = htmlspecialchars($dpw['username']);
+                                ?>
+                                <tr>
+                                    <td><?php echo $nama_pw; ?></td>
+                                    <td><?php echo strtoupper($tipe_pw); ?></td>
+                                    <td><?php echo $tglwaktu_pw; ?></td>
+                                    <td><?php echo $dpw['meter_awal']; ?></td>
+                                    <td><?php echo $dpw['meter_akhir']; ?></td>
+                                    <td><?php echo $dpw['pemakaian']; ?></td>
+                                    <td><?php echo $tagihan_pw; ?></td>
+                                    <td><span class="badge bg-<?php echo $badge_pw; ?>"><?php echo ($status_pw === 'LUNAS') ? 'LUNAS' : 'BLM LUNAS'; ?></span></td>
+                                    <td>
+                                        <a href="index.php?p=meter_edit&id=<?php echo $id_pw; ?>&dari=pemakaian_warga"><button type="button" class="btn btn-outline-warning btn-sm">Ubah</button></a>
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                            data-bs-toggle="modal" data-bs-target="#myModalMeter"
+                                            data-id_meter="<?php echo $id_pw; ?>" data-id_pelanggan="<?php echo $id_user_pw; ?>">Hapus</button>
+                                    </td>
+                                </tr>
+                                <?php endwhile; endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
 
             </div>
         </main>
@@ -1302,6 +1417,12 @@ $(document).ready(function() {
     $('#btn_tambah_tarif').click(function() {
         $('#tarif_add').slideToggle();
         $('html, body').animate({ scrollTop: $('#tarif_add').offset().top - 80 }, 400);
+    });
+
+    // ─── Tombol + Meter toggle form catat meter ──────────────────
+    $('#btn_tambah_meter').click(function() {
+        $('#catat_meter_add').slideToggle();
+        $('html, body').animate({ scrollTop: $('#catat_meter_add').offset().top - 80 }, 400);
     });
 
     // ─── Modal Hapus Tarif: isi hidden input id_tarif ─────────────
