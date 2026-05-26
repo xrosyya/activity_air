@@ -1,4 +1,5 @@
 <?php
+ob_start();
 session_start();
 date_default_timezone_set('Asia/Jakarta');
 include '../assets/func.php';
@@ -51,6 +52,7 @@ if (!empty($page)) {
         "melihat_infografis_tagihan_warga"              => ["Melihat Infografis Tagihan Warga",                  "Melihat Infografis Tagihan Warga"],
         "tarif"                                         => ["Manajemen Tarif Air",                               "Manajemen Tarif Air"],
         "catat_meter"                                   => ["Catat Meter", "Daftar pencatatan meter air warga"],
+        "lihat_data_pemakaian"                          => ["Lihat Data Pemakaian", "Daftar pencatatan meter air warga"],
         "mengubah_datameter_air_warga_dalam_satu_bulan" => ["Mengubah Datameter Air Warga Dalam Satu Bulan",     "Mengubah Datameter Air Warga Dalam Satu Bulan"],
         "melihat_jumlah_total_pelanggan"                => ["Melihat Jumlah Total Pelanggan",                    "Melihat Jumlah Total Pelanggan"],
         "melihat_jumlah_pemakaian_air_seluruh_warga"    => ["Melihat Jumlah Pemakaian Air Seluruh Warga",        "Melihat Jumlah Pemakaian Air Seluruh Warga"],
@@ -63,6 +65,86 @@ if (!empty($page)) {
     if (isset($routes[$page])) {
         $h1 = $routes[$page][0];
         $li = $routes[$page][1];
+    }
+}
+
+// HANDLER POST — USER (harus diproses sebelum HTML, gunakan name="aksi_user")
+if (isset($_POST['aksi_user'])) {
+    $t_user    = $_POST['aksi_user'];
+    $user_input= mysqli_real_escape_string($koneksi, trim($_POST['username'] ?? ''));
+    $pass2     = $_POST['pwd'] ?? '';
+    $nama_in   = mysqli_real_escape_string($koneksi, trim($_POST['nama'] ?? ''));
+    $alamat_in = mysqli_real_escape_string($koneksi, trim($_POST['alamat'] ?? ''));
+    $kota_in   = mysqli_real_escape_string($koneksi, trim($_POST['kota'] ?? ''));
+    $tele_in   = mysqli_real_escape_string($koneksi, trim($_POST['telephone'] ?? ''));
+    $level_in  = mysqli_real_escape_string($koneksi, trim($_POST['level'] ?? ''));
+    $tipe_in   = mysqli_real_escape_string($koneksi, trim($_POST['tipe'] ?? ''));
+    $status_in = mysqli_real_escape_string($koneksi, trim($_POST['status'] ?? ''));
+
+    if ($t_user == "user_add") {
+        $pass = password_hash($pass2, PASSWORD_DEFAULT);
+        $qc = mysqli_query($koneksi, "SELECT username FROM login WHERE username='$user_input'");
+        if (mysqli_num_rows($qc) == 0) {
+            mysqli_query($koneksi, "INSERT INTO login (username, password, nama, alamat, kota, telephone, level, tipe, status) VALUES ('$user_input', '$pass', '$nama_in', '$alamat_in', '$kota_in', '$tele_in', '$level_in', '$tipe_in', '$status_in')");
+            if (mysqli_affected_rows($koneksi) > 0) {
+                $_SESSION['notif'] = ['type' => 'success', 'msg' => "User <b>$user_input</b> berhasil ditambahkan."];
+            } else {
+                $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal menambahkan user: " . mysqli_error($koneksi)];
+            }
+        } else {
+            $_SESSION['notif'] = ['type' => 'warning', 'msg' => "Username <b>$user_input</b> sudah ada."];
+        }
+        header("Location: index.php?p=user");
+        exit;
+    }
+
+    if ($t_user == "user_edit") {
+        $user_lama = mysqli_real_escape_string($koneksi, trim($_POST['user_lama'] ?? ''));
+        if (!empty($pass2)) {
+            $pass = password_hash($pass2, PASSWORD_DEFAULT);
+            $query_up = "UPDATE login SET username='$user_input', password='$pass', nama='$nama_in', alamat='$alamat_in', kota='$kota_in', telephone='$tele_in', level='$level_in', tipe='$tipe_in', status='$status_in' WHERE username='$user_lama'";
+        } else {
+            $query_up = "UPDATE login SET username='$user_input', nama='$nama_in', alamat='$alamat_in', kota='$kota_in', telephone='$tele_in', level='$level_in', tipe='$tipe_in', status='$status_in' WHERE username='$user_lama'";
+        }
+        if (mysqli_query($koneksi, $query_up)) {
+            $_SESSION['notif'] = ['type' => 'success', 'msg' => "User <b>$user_input</b> berhasil diupdate."];
+        } else {
+            $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal update user: " . mysqli_error($koneksi)];
+        }
+        header("Location: index.php?p=user");
+        exit;
+    }
+}
+
+// HANDLER DELETE USER (via GET)
+if (isset($_GET['p']) && $_GET['p'] == 'user_hapus' && isset($_GET['user'])) {
+    $user_hapus = mysqli_real_escape_string($koneksi, $_GET['user']);
+    $hapus = mysqli_query($koneksi, "DELETE FROM login WHERE username='$user_hapus'");
+    if ($hapus) {
+        $_SESSION['notif'] = ['type' => 'success', 'msg' => "User <b>$user_hapus</b> berhasil dihapus."];
+    } else {
+        $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal menghapus user."];
+    }
+    header("Location: index.php?p=user");
+    exit;
+}
+
+// GUARD: petugas edit meter > 30 hari → redirect sebelum HTML
+if (isset($_GET['p']) && $_GET['p'] == 'meter_edit' && isset($_GET['id'])) {
+    $id_guard_m = (int) $_GET['id'];
+    $q_guard_m  = mysqli_query($koneksi, "SELECT tgl FROM pemakaian WHERE no='$id_guard_m'");
+    $d_guard_m  = mysqli_fetch_assoc($q_guard_m);
+    if ($d_guard_m) {
+        $level_g = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
+        if ($level_g === 'petugas') {
+            $tgl_g  = date_create($d_guard_m['tgl'] ?? '');
+            $diff_g = $tgl_g ? date_diff($tgl_g, date_create())->days : 0;
+            if ($diff_g > 30) {
+                $_SESSION['notif'] = ['type' => 'warning', 'msg' => 'Akses ditolak. Data lebih dari 30 hari tidak dapat diedit.'];
+                header("Location: index.php?p=catat_meter");
+                exit;
+            }
+        }
     }
 }
 
@@ -141,7 +223,7 @@ if (isset($_POST['tombol'])) {
 
         // Ambil tarif aktif pelanggan
         $q_tarif = mysqli_query($koneksi, "SELECT t.tarif, t.id_tarif FROM tarif t 
-                                            JOIN login l ON l.kd_tarif = t.id_tarif 
+                                            JOIN login l ON LOWER(l.tipe) = LOWER(t.tipe) 
                                             WHERE l.username = '$id_pel' AND t.status='AKTIF' LIMIT 1");
         $d_tarif  = mysqli_fetch_assoc($q_tarif);
         $kd_tarif = $d_tarif['id_tarif'] ?? '';
@@ -474,112 +556,43 @@ if (isset($_POST['tombol'])) {
                 <?php
                 // Nilai default dan Mode
                 $user = $pass2 = $nama = $alamat = $kota = $telephone = '';
-                $level = $tipe = $status = '';
+                $level_form = $tipe_form = $status_form = '';
                 $mode = "user_add"; 
                 $txt_tombol = "Simpan";
-                $display_form = "none"; // Form disembunyikan secara default
+                $display_form = in_array($page, ['user', 'user_edit']) ? "block" : "none";
 
-                
-
-                // 1. LOGIKA KETIKA TOMBOL EDIT DIPENCET (Mengambil data dari DB)
+                // Ambil data jika mode edit
                 if (isset($_GET['p']) && $_GET['p'] == 'user_edit' && isset($_GET['user'])) {
                     $mode = "user_edit";
                     $txt_tombol = "Update Data";
-                    $display_form = "block"; // Munculkan form otomatis
-                    $get_user = $_GET['user'];
+                    $display_form = "block";
+                    $get_user = mysqli_real_escape_string($koneksi, $_GET['user']);
                     
                     $q_edit = mysqli_query($koneksi, "SELECT * FROM login WHERE username='$get_user'");
-                    if($d_edit = mysqli_fetch_assoc($q_edit)){
+                    if ($d_edit = mysqli_fetch_assoc($q_edit)) {
                         $user      = $d_edit['username'];
                         $nama      = $d_edit['nama'];
                         $alamat    = $d_edit['alamat'];
                         $kota      = $d_edit['kota'];
                         $telephone = $d_edit['telephone'];
-                        $level     = $d_edit['level'];
-                        $tipe      = $d_edit['tipe'];
-                        $status    = $d_edit['status'];
+                        $level_form= $d_edit['level'];
+                        $tipe_form = $d_edit['tipe'];
+                        $status_form = $d_edit['status'];
                     }
                 }
 
-                // 2. LOGIKA KETIKA TOMBOL SIMPAN / UPDATE DITEKAN
-                if (isset($_POST['tombol'])) {
-                    $t = $_POST['tombol'];
-                    $user_input= $_POST['username'];
-                    $pass2     = $_POST['pwd'];
-                    $nama_in   = $_POST['nama'];
-                    $alamat_in = $_POST['alamat'];
-                    $kota_in   = $_POST['kota'];
-                    $tele_in   = $_POST['telephone'];
-                    $level_in  = $_POST['level'];
-                    $tipe_in   = $_POST['tipe'];
-                    $status_in = $_POST['status'];
-
-                    // JIKA MODE TAMBAH DATA (INSERT)
-                    if ($t == "user_add") {
-                        $pass = password_hash($pass2, PASSWORD_DEFAULT);
-                        $qc = mysqli_query($koneksi, "SELECT username FROM login WHERE username='$user_input'");
-                        if (mysqli_num_rows($qc) == 0) {
-                            mysqli_query($koneksi, "INSERT INTO login (username, password, nama, alamat, kota, telephone, level, tipe, status, tgl) VALUE ('$user_input', '$pass', '$nama_in', '$alamat_in', '$kota_in', '$tele_in', '$level_in', '$tipe_in', '$status_in', NOW())");
-                            if (mysqli_affected_rows($koneksi) > 0) {
-                                echo "<div class='alert alert-success alert-dismissible fade show'><button type=button class=btn-close data-bs-dismiss=alert></button><strong>Data</strong> berhasil dimasukkan...</div>";
-                            } else {
-                                echo "<div class='alert alert-danger alert-dismissible fade show'><button type=button class=btn-close data-bs-dismiss=alert></button><strong>Data</strong> GAGAL dimasukkan...</div>";
-                            }
-                        } else {
-                            echo "<div class='alert alert-warning alert-dismissible fade show'><button type=button class=btn-close data-bs-dismiss=alert></button>Username <strong>$user_input</strong> sudah ada...</div>";
-                        }
-                    } 
-                    // JIKA MODE EDIT DATA (UPDATE)
-                    elseif ($t == "user_edit") {
-                        $user_lama = $_GET['user'];
-                        
-                        if(!empty($pass2)) {
-                            // Jika password diisi, update passwordnya juga
-                            $pass = password_hash($pass2, PASSWORD_DEFAULT);
-                            $query_up = "UPDATE login SET username='$user_input', password='$pass', nama='$nama_in', alamat='$alamat_in', kota='$kota_in', telephone='$tele_in', level='$level_in', tipe='$tipe_in', status='$status_in' WHERE username='$user_lama'";
-                        } else {
-                            // Jika password dikosongkan, jangan update password
-                            $query_up = "UPDATE login SET username='$user_input', nama='$nama_in', alamat='$alamat_in', kota='$kota_in', telephone='$tele_in', level='$level_in', tipe='$tipe_in', status='$status_in' WHERE username='$user_lama'";
-                        }
-
-                        if(mysqli_query($koneksi, $query_up)) {
-                            echo "<div class='alert alert-success alert-dismissible fade show'><button type=button class=btn-close data-bs-dismiss=alert></button><strong>Data</strong> berhasil diupdate...</div>";
-                            echo "<meta http-equiv='refresh' content='1;url=index.php?p=user'>"; // Auto refresh kembali ke tabel normal
-                        } else {
-                            echo "<div class='alert alert-danger alert-dismissible fade show'><button type=button class=btn-close data-bs-dismiss=alert></button><strong>Data</strong> GAGAL diupdate...</div>";
-                        }
-                    }
-                }
-
-                if (isset($_GET['p']) && $_GET['p'] == 'user_hapus' && isset($_GET['user'])) {
-                    $user_hapus = $_GET['user'];
-                    $hapus = mysqli_query($koneksi, "DELETE FROM login WHERE username='$user_hapus'");
-                    
-                    // Alihkan langsung kembali ke p=user dengan membawa pesan (msg) di URL
-                    if ($hapus) {
-                        echo "<script>window.location.href='index.php?p=user&msg=hapus_sukses';</script>";
-                    } else {
-                        echo "<script>window.location.href='index.php?p=user&msg=hapus_gagal';</script>";
-                    }
-                    exit;
-                }
-
-                // TAMPILKAN NOTIFIKASI JIKA ADA PESAN DARI URL
-                if (isset($_GET['msg'])) {
-                    if ($_GET['msg'] == 'hapus_sukses') {
-                        echo "<div class='alert alert-success alert-dismissible fade show'><button type='button' class='btn-close' data-bs-dismiss='alert'></button><strong>Berhasil!</strong> Data user telah dihapus.</div>";
-                    } elseif ($_GET['msg'] == 'hapus_gagal') {
-                        echo "<div class='alert alert-danger alert-dismissible fade show'><button type='button' class='btn-close' data-bs-dismiss='alert'></button><strong>Gagal</strong> menghapus data.</div>";
-                    }
+                // Notif dari session
+                if (isset($_SESSION['notif']) && in_array($page, ['user', 'user_edit', ''])) {
+                    // ditampilkan di blok notif utama di atas
                 }
                 ?>
-                <div id="user_add" class="card mb-4" style="display: <?php echo $display_form; ?>;">
+                <div id="user_add" class="card mb-4" style="display: <?php echo (in_array($page, ['user', 'user_edit'])) ? $display_form : 'none'; ?>;"><?php // hanya tampil di halaman user ?>
                     <div class="card-header d-flex align-items-center gap-2">
                         <?php if($mode == 'user_edit'): ?>
                             <i class="fa-solid fa-user-pen me-1 text-warning fa-fade"></i>
                             <span>Edit User &mdash; <strong><?php echo htmlspecialchars($user); ?></strong></span>
                         <?php else: ?>
-                            <i class="fa-solid fa-user-plus me-1 text-success fa-fade"></i>
+                            <i class="fa-solid fa-users me-1 text-success fa-fade"></i>
                             <span>Tambah User</span>
                         <?php endif; ?>
                     </div>
@@ -593,7 +606,12 @@ if (isset($_POST['tombol'])) {
                         </div>
                         <?php endif; ?>
 
-                        <form method="post" class="needs-validation" id="user_form">
+                        <form method="post" action="index.php" class="needs-validation" id="user_form">
+                            <!-- Hidden fields untuk identifikasi aksi -->
+                            <input type="hidden" name="aksi_user" value="<?php echo $mode; ?>">
+                            <?php if($mode == 'user_edit'): ?>
+                            <input type="hidden" name="user_lama" value="<?php echo htmlspecialchars($user); ?>">
+                            <?php endif; ?>
 
                             <!-- USERNAME: dikunci saat edit, bisa diisi saat tambah -->
                             <div class="mb-3">
@@ -664,7 +682,7 @@ if (isset($_POST['tombol'])) {
                                         <?php
                                         $lv = array("admin", "bendahara", "petugas", "warga");
                                         foreach ($lv as $lv2) {
-                                            $sel = (isset($level) && $level == $lv2) ? "selected" : "";
+                                            $sel = (isset($level_form) && $level_form == $lv2) ? "selected" : "";
                                             echo "<option value='$lv2' $sel>" . ucwords($lv2) . "</option>";
                                         }
                                         ?>
@@ -677,7 +695,7 @@ if (isset($_POST['tombol'])) {
                                         <?php
                                         $tp = array("RT", "kos");
                                         foreach ($tp as $t2) {
-                                            $sel = (isset($tipe) && $tipe == $t2) ? "selected" : "";
+                                            $sel = (isset($tipe_form) && $tipe_form == $t2) ? "selected" : "";
                                             echo "<option value='$t2' $sel>" . ucwords($t2) . "</option>";
                                         }
                                         ?>
@@ -690,7 +708,7 @@ if (isset($_POST['tombol'])) {
                                         <?php
                                         $st = array("AKTIF", "TIDAK AKTIF");
                                         foreach ($st as $s2) {
-                                            $sel = (isset($status) && $status == $s2) ? "selected" : "";
+                                            $sel = (isset($status_form) && $status_form == $s2) ? "selected" : "";
                                             echo "<option value='$s2' $sel>$s2</option>";
                                         }
                                         ?>
@@ -700,8 +718,7 @@ if (isset($_POST['tombol'])) {
 
                             <!-- TOMBOL AKSI -->
                             <div class="d-flex gap-2 mt-4 pt-2 border-top">
-                                <button type="submit" class="btn <?php echo $mode == 'user_edit' ? 'btn-warning' : 'btn-primary'; ?> px-4"
-                                        name="tombol" value="<?php echo $mode; ?>">
+                                <button type="submit" class="btn <?php echo $mode == 'user_edit' ? 'btn-warning' : 'btn-primary'; ?> px-4">
                                     <i class="fas <?php echo $mode == 'user_edit' ? 'fa-save' : 'fa-plus'; ?> me-1"></i>
                                     <?php echo $txt_tombol; ?>
                                 </button>
@@ -715,14 +732,9 @@ if (isset($_POST['tombol'])) {
                         </form>
                     </div>
                 </div>
-                <div class="card mb-4" id="user_list">
+                <div class="card mb-4" id="user_list" style="display:<?php echo in_array($page, ['user','user_edit']) ? 'block' : 'none'; ?>;">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <span><i class="fa-solid fa-users me-2 text-success fa-fade"></i> Data User</span>
-                        <?php if($mode != 'user_edit'): ?>
-                        <button type="button" id="btn_tambah_user" class="btn btn-success btn-sm px-3">
-                            <i class="fas fa-user-plus me-1"></i> + User
-                        </button>
-                        <?php endif; ?>
                     </div>
                     <div class="card-body table-responsive">
                         <table id="datatablesSimple" class="table table-bordered table-striped table-hover align-middle mb-0">
@@ -777,9 +789,11 @@ if (isset($_POST['tombol'])) {
                                             <a href='index.php?p=user_edit&user=$user' class='btn btn-success btn-sm' title='Edit'>
                                                 <i class='fas fa-edit'></i>
                                             </a>
-                                            <a href='index.php?p=user_hapus&user=$user' class='btn btn-danger btn-sm' title='Hapus' onclick='return confirm(\"Yakin ingin menghapus data $user?\")'>
+                                            <button type='button' class='btn btn-danger btn-sm' title='Hapus'
+                                                data-bs-toggle='modal' data-bs-target='#myModalUser'
+                                                data-username='$user'>
                                                 <i class='fas fa-trash'></i>
-                                            </a>
+                                            </button>
                                         </td>
                                     </tr>";
                                     $no++;
@@ -853,10 +867,22 @@ if (isset($_POST['tombol'])) {
                     </div>
                 </div>
 
-                <div id="tarif_add" class="card mb-4" style="display: none; border-top: 4px solid #1cc88a; box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,0.15);">
+                <?php
+                // Ambil data edit tarif sebelum render form (agar bisa pre-fill via PHP)
+                $edit_t = null;
+                $tarif_add_display = 'none';
+                if ($page == "tarif_edit" && isset($_GET['id'])) {
+                    $id_edit  = mysqli_real_escape_string($koneksi, $_GET['id']);
+                    $q_edit_t = mysqli_query($koneksi, "SELECT * FROM tarif WHERE id_tarif='$id_edit'");
+                    $edit_t   = mysqli_fetch_array($q_edit_t);
+                    if ($edit_t) $tarif_add_display = 'block';
+                }
+                ?>
+                <div id="tarif_add" class="card mb-4" style="display: <?php echo $tarif_add_display; ?>; border-top: 4px solid #1cc88a; box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,0.15);">
                     <div class="card-header bg-white py-3">
                         <h5 class="m-0 fw-bold text-success">
-                            <i class="fas fa-plus-circle me-2"></i> Form Input Data Tarif
+                            <i class="fas <?php echo $edit_t ? 'fa-edit' : 'fa-plus-circle'; ?> me-2"></i>
+                            <?php echo $edit_t ? 'Edit Data Tarif' : 'Form Input Data Tarif'; ?>
                         </h5>
                     </div>
                     <div class="card-body px-4 py-4">
@@ -864,13 +890,30 @@ if (isset($_POST['tombol'])) {
                             <div class="row mb-3 align-items-center">
                                 <label class="col-md-3 col-form-label fw-bold fs-6">ID Tarif</label>
                                 <div class="col-md-9">
-                                    <input type="text" class="form-control form-control-lg" name="yid_tarif" placeholder="Masukkan ID (Contoh: TRF001)" required>
+                                    <?php if ($edit_t): ?>
+                                        <input type="text" class="form-control form-control-lg bg-light text-muted"
+                                            name="yid_tarif" value="<?php echo htmlspecialchars($edit_t['id_tarif']); ?>" readonly>
+                                    <?php else: ?>
+                                        <input type="text" class="form-control form-control-lg" name="yid_tarif"
+                                            placeholder="Masukkan ID (Contoh: TRF001)" required>
+                                    <?php endif; ?>
                                 </div>
                             </div>
                             <div class="row mb-3 align-items-center">
                                 <label class="col-md-3 col-form-label fw-bold fs-6">Tipe Tarif</label>
                                 <div class="col-md-9">
-                                    <input type="text" class="form-control form-control-lg" name="tipe" placeholder="Contoh: Rumah Tangga / Industri / Kos" required>
+                                    <?php
+                                    $tipe_options = ['Rumah Tangga', 'Industri', 'Kos', 'Niaga', 'Sosial'];
+                                    $tipe_val = $edit_t ? htmlspecialchars($edit_t['tipe']) : '';
+                                    ?>
+                                    <select class="form-select form-select-lg" name="tipe" required>
+                                        <option value="">-- Pilih Tipe --</option>
+                                        <?php foreach ($tipe_options as $opt): ?>
+                                            <option value="<?php echo $opt; ?>" <?php echo ($tipe_val == $opt) ? 'selected' : ''; ?>>
+                                                <?php echo $opt; ?>
+                                            </option>
+                                        <?php endforeach; ?>
+                                    </select>
                                 </div>
                             </div>
                             <div class="row mb-3 align-items-center">
@@ -878,7 +921,9 @@ if (isset($_POST['tombol'])) {
                                 <div class="col-md-9">
                                     <div class="input-group input-group-lg">
                                         <span class="input-group-text bg-white fw-bold">Rp</span>
-                                        <input type="number" class="form-control" name="tarif" placeholder="0" min="0" required>
+                                        <input type="number" class="form-control" name="tarif" min="0" required
+                                            value="<?php echo $edit_t ? htmlspecialchars($edit_t['tarif']) : ''; ?>"
+                                            placeholder="0">
                                     </div>
                                 </div>
                             </div>
@@ -886,14 +931,19 @@ if (isset($_POST['tombol'])) {
                                 <label class="col-md-3 col-form-label fw-bold fs-6">Status Aktivasi</label>
                                 <div class="col-md-9">
                                     <div class="d-flex gap-4 mt-1">
+                                        <?php
+                                        $status_db = $edit_t ? strtolower($edit_t['status']) : 'aktif';
+                                        ?>
                                         <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="radio" name="status" id="st_aktif" value="aktif" checked required>
+                                            <input class="form-check-input" type="radio" name="status" id="st_aktif" value="aktif"
+                                                <?php echo ($status_db == 'aktif') ? 'checked' : ''; ?> required>
                                             <label class="form-check-label fw-bold text-success fs-6" for="st_aktif">
                                                 <i class="fas fa-check-circle me-1"></i> Aktif
                                             </label>
                                         </div>
                                         <div class="form-check form-check-inline">
-                                            <input class="form-check-input" type="radio" name="status" id="st_non" value="tidak aktif" required>
+                                            <input class="form-check-input" type="radio" name="status" id="st_non" value="tidak aktif"
+                                                <?php echo ($status_db == 'tidak aktif') ? 'checked' : ''; ?> required>
                                             <label class="form-check-label fw-bold text-danger fs-6" for="st_non">
                                                 <i class="fas fa-times-circle me-1"></i> Tidak Aktif
                                             </label>
@@ -906,32 +956,16 @@ if (isset($_POST['tombol'])) {
                                 <a href="index.php?p=tarif" class="btn btn-secondary btn-lg px-4">
                                     <i class="fas fa-arrow-left me-1"></i> Batal
                                 </a>
-                                <button type="submit" class="btn btn-success btn-lg px-5" name="tombol" value="tarif_add">
-                                    <i class="fas fa-save me-1"></i> Simpan Data
+                                <button type="submit" class="btn btn-success btn-lg px-5" name="tombol"
+                                    value="<?php echo $edit_t ? 'tarif_edit' : 'tarif_add'; ?>">
+                                    <i class="fas fa-save me-1"></i> <?php echo $edit_t ? 'Update Data' : 'Simpan Data'; ?>
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
 
-                <?php 
-                if ($page == "tarif_edit" && isset($_GET['id'])) { 
-                    $id_edit  = mysqli_real_escape_string($koneksi, $_GET['id']);
-                    $q_edit_t = mysqli_query($koneksi, "SELECT * FROM tarif WHERE id_tarif='$id_edit'");
-                    $d_edit_t = mysqli_fetch_array($q_edit_t);
-                    if ($d_edit_t) { ?>
-                    <script>
-                    $(document).ready(function(){
-                        $("#tarif_form input[name='yid_tarif']").val("<?php echo htmlspecialchars($d_edit_t['id_tarif']); ?>");
-                        $("#tarif_form input[name='tipe']").val("<?php echo htmlspecialchars($d_edit_t['tipe']); ?>");
-                        $("#tarif_form input[name='tarif']").val("<?php echo htmlspecialchars($d_edit_t['tarif']); ?>");
-                        var status = "<?php echo strtolower($d_edit_t['status']); ?>";
-                        $("#tarif_form input[name='status'][value='" + status + "']").prop("checked", true);
-                    });
-                    </script>
-                    <?php } } ?>
-
-                <div class="card mb-4 shadow-sm" id="catat_meter_list" style="display:<?php echo (in_array($page, ['catat_meter', 'meter_edit'])) ? 'block' : 'none'; ?>; border-top: 4px solid #4e73df; border-radius: 0.5rem;">
+                <div class="card mb-4 shadow-sm" id="catat_meter_list" style="display:<?php echo (in_array($page, ['catat_meter', 'meter_edit', 'lihat_data_pemakaian'])) ? 'block' : 'none'; ?>; border-top: 4px solid #4e73df; border-radius: 0.5rem;">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8f9ff 0%, #eaecf4 100%);">
                         <div class="d-flex align-items-center gap-2">
                             <div style="background:#4e73df;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
@@ -942,9 +976,11 @@ if (isset($_POST['tombol'])) {
                                 <small class="text-muted">Daftar pencatatan meter air warga</small>
                             </div>
                         </div>
+                        <?php if ($page !== 'lihat_data_pemakaian'): ?>
                         <button type="button" id="btn_tambah_meter" class="btn btn-primary d-flex align-items-center gap-2" style="border-radius:8px; padding:8px 18px; font-weight:600;">
                             <i class="fas fa-plus"></i> Catat Meter
                         </button>
+                        <?php endif; ?>
                     </div>
                     <div class="card-body">
                         <?php
@@ -967,7 +1003,9 @@ if (isset($_POST['tombol'])) {
                                     <th>Meter Awal</th>
                                     <th>Meter Akhir</th>
                                     <th>Pemakaian (m³)</th>
+                                    <?php if ($page !== 'lihat_data_pemakaian'): ?>
                                     <th>Aksi</th>
+                                    <?php endif; ?>
                                 </tr>
                             </thead>
                             <tbody>
@@ -1014,22 +1052,24 @@ if (isset($_POST['tombol'])) {
                                     <td>$tgl_waktu</td>
                                     <td>$m_awal</td>
                                     <td>$m_akhir</td>
-                                    <td>$pakai m³</td>
-                                    <td>";
+                                    <td>$pakai m³</td>";
 
-                                // Logika tombol aksi: admin/bendahara selalu bisa, petugas hanya <= 30 hari
-                                $level_login = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
-                                if ($level_login == 'admin' || $level_login == 'bendahara' || $selisih <= 30) {
-                                    echo "
-                                        <a href='index.php?p=meter_edit&id=$id_r'><button type='button' class='btn btn-outline-warning btn-sm'>Edit</button></a>
-                                        <button type='button' class='btn btn-outline-danger btn-sm'
-                                            data-bs-toggle='modal' data-bs-target='#myModalMeter'
-                                            data-id_meter='$id_r' data-id_pelanggan='$id_p'>Hapus</button>
-                                    ";
+                                // Kolom aksi: sembunyikan di halaman lihat_data_pemakaian
+                                if ($page !== 'lihat_data_pemakaian') {
+                                    echo "<td>";
+                                    $level_login = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
+                                    if ($level_login == 'admin' || $level_login == 'bendahara' || $selisih <= 30) {
+                                        echo "
+                                            <a href='index.php?p=meter_edit&id=$id_r'><button type='button' class='btn btn-outline-warning btn-sm'>Edit</button></a>
+                                            <button type='button' class='btn btn-outline-danger btn-sm'
+                                                data-bs-toggle='modal' data-bs-target='#myModalMeter'
+                                                data-id_meter='$id_r' data-id_pelanggan='$id_p'>Hapus</button>
+                                        ";
+                                    }
+                                    echo "</td>";
                                 }
-                                // petugas + > 30 hari: kolom aksi kosong
 
-                                echo "</td></tr>";
+                                echo "</tr>";
                                 $no_m++;
                             }
                                 
@@ -1039,37 +1079,43 @@ if (isset($_POST['tombol'])) {
                     </div>
                 </div>
 
-                <div id="catat_meter_add" class="card mb-4" style="display: none;">
+                <?php
+                // Ambil data edit meter di sini (sebelum form render) agar bisa pre-fill via PHP
+                $edit_m = null;
+                $edit_m_display = 'none';
+                if ($page == "meter_edit" && isset($_GET['id'])) {
+                    $id_edit_m = (int) $_GET['id'];
+                    $q_edit_m  = mysqli_query($koneksi, "SELECT p.*, l.nama FROM pemakaian p LEFT JOIN login l ON l.username = p.username WHERE p.no='$id_edit_m'");
+                    $edit_m    = mysqli_fetch_assoc($q_edit_m);
+                    if ($edit_m) {
+                        $edit_m_display = 'block';
+                    }
+                }
+                ?>
+                <div id="catat_meter_add" class="card mb-4" style="display: <?php echo $edit_m_display; ?>;">
                     <div class="card-header">
                         <i class="fas fa-tachometer-alt fa-fade me-1" style="color: rgb(99, 230, 190);"></i>
-                        Meter
+                        <?php echo $edit_m ? 'Edit Data Meter' : 'Catat Meter'; ?>
                     </div>
                     <div class="card-body">
                         <form id="meter_form" method="POST" action="index.php">
-                            <input type="hidden" name="id_meter" id="form_id_meter" value="">
-                            <input type="hidden" name="tgl" id="inp_tgl" value="<?php echo date('Y-m-d'); ?>">
-                            <input type="hidden" name="waktu" id="inp_waktu" value="<?php echo date('H:i'); ?>">
+                            <!-- id_meter: langsung di-set dari PHP, bukan JS -->
+                            <input type="hidden" name="id_meter" id="form_id_meter" value="<?php echo $edit_m ? (int)$edit_m['no'] : ''; ?>">
+                            <input type="hidden" name="tgl" id="inp_tgl" value="<?php echo $edit_m ? htmlspecialchars($edit_m['tgl']) : date('Y-m-d'); ?>">
+                            <input type="hidden" name="waktu" id="inp_waktu" value="<?php echo $edit_m ? htmlspecialchars(substr($edit_m['waktu'], 0, 5)) : date('H:i'); ?>">
 
                             <div class="mb-3">
                                 <label class="form-label">Nama Warga:</label>
-                                <?php if ($page == 'meter_edit' && isset($_GET['id'])): ?>
-                                    <?php
-                                    // Ambil data untuk mode edit
-                                    $id_cek_m = (int) $_GET['id'];
-                                    $q_cek_m  = mysqli_query($koneksi, "SELECT p.username, l.nama FROM pemakaian p LEFT JOIN login l ON l.username = p.username WHERE p.no='$id_cek_m' LIMIT 1");
-                                    $d_cek_m  = mysqli_fetch_assoc($q_cek_m);
-                                    $locked_username = htmlspecialchars($d_cek_m['username'] ?? '');
-                                    $locked_nama     = htmlspecialchars($d_cek_m['nama'] ?? $d_cek_m['username'] ?? '');
-                                    ?>
-                                    <!-- Mode edit: nama terkunci, tidak bisa diubah -->
-                                    <input type="text" class="form-control bg-light" value="<?php echo $locked_nama; ?>" readonly>
-                                    <input type="hidden" name="id_pelanggan" value="<?php echo $locked_username; ?>">
+                                <?php if ($edit_m): ?>
+                                    <!-- Mode edit: nama terkunci -->
+                                    <input type="text" class="form-control bg-light" value="<?php echo htmlspecialchars($edit_m['nama'] ?? $edit_m['username']); ?>" readonly>
+                                    <input type="hidden" name="id_pelanggan" value="<?php echo htmlspecialchars($edit_m['username']); ?>">
                                 <?php else: ?>
                                     <!-- Mode tambah: dropdown pilih warga -->
                                     <select class="form-select" name="id_pelanggan" id="sel_id_pelanggan" required>
                                         <option value="">-- Pilih Warga --</option>
                                         <?php
-                                        $qwarga = mysqli_query($koneksi, "SELECT username, nama FROM login WHERE LOWER(level)='warga' AND UPPER(status)='AKTIF' ORDER BY nama ASC");
+                                        $qwarga = mysqli_query($koneksi, "SELECT username, nama FROM login WHERE LOWER(level)='warga' ORDER BY nama ASC");
                                         while ($dw = mysqli_fetch_assoc($qwarga)) {
                                             $uname  = htmlspecialchars($dw['username']);
                                             $nwarga = htmlspecialchars($dw['nama']);
@@ -1083,17 +1129,20 @@ if (isset($_POST['tombol'])) {
                             <div class="mb-3">
                                 <label class="form-label">Meter Awal (m³):</label>
                                 <input type="number" class="form-control" name="meter_awal" id="inp_meter_awal"
-                                    placeholder="0" min="0" step="0.01" required>
+                                    placeholder="0" min="0" step="0.01" required
+                                    value="<?php echo $edit_m ? htmlspecialchars($edit_m['meter_awal']) : ''; ?>">
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Meter Akhir (m³):</label>
                                 <input type="number" class="form-control" name="meter_akhir" id="inp_meter_akhir"
-                                    placeholder="0" min="0" step="0.01" required>
+                                    placeholder="0" min="0" step="0.01" required
+                                    value="<?php echo $edit_m ? htmlspecialchars($edit_m['meter_akhir']) : ''; ?>">
                             </div>
 
-                            <button type="submit" class="btn btn-primary" name="tombol" id="btn_meter_submit" value="meter_add">
-                                Simpan
+                            <button type="submit" class="btn btn-primary" name="tombol" id="btn_meter_submit"
+                                value="<?php echo $edit_m ? 'meter_edit' : 'meter_add'; ?>">
+                                <?php echo $edit_m ? 'Simpan Perubahan' : 'Simpan'; ?>
                             </button>
                             <a href="index.php?p=catat_meter" class="btn btn-secondary ms-2">Batal</a>
                         </form>
@@ -1101,38 +1150,15 @@ if (isset($_POST['tombol'])) {
                 </div>
 
                 <?php
-                // Mode Edit: isi form dari data DB
-                if ($page == "meter_edit" && isset($_GET['id'])) {
-                    $id_edit_m = (int) $_GET['id'];
-                    $q_edit_m  = mysqli_query($koneksi, "SELECT p.*, l.nama FROM pemakaian p LEFT JOIN login l ON l.username = p.username WHERE p.no='$id_edit_m'");
-                    $d_edit_m  = mysqli_fetch_assoc($q_edit_m);
-                    // Guard: petugas hanya boleh edit data <= 30 hari, admin bebas
-                    if ($d_edit_m) {
-                        $level_guard = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
-                        if ($level_guard === 'petugas') {
-                            $tgl_guard  = date_create($d_edit_m['tgl'] ?? '');
-                            $diff_guard = $tgl_guard ? date_diff($tgl_guard, date_create())->days : 0;
-                            if ($diff_guard > 30) {
-                                $_SESSION['notif'] = ['type' => 'warning', 'msg' => 'Akses ditolak. Data lebih dari 30 hari tidak dapat diedit.'];
-                                header("Location: index.php?p=catat_meter");
-                                exit;
-                            }
-                        }
-                    }
-                    if ($d_edit_m) { ?>
-                    <script>
-                    $(document).ready(function(){
-                        $("#catat_meter_add").show();
-                        $("#form_id_meter").val("<?php echo $d_edit_m['no']; ?>");
-                        $("#inp_tgl").val("<?php echo $d_edit_m['tgl']; ?>");
-                        $("#inp_waktu").val("<?php echo substr($d_edit_m['waktu'], 0, 5); ?>");
-                        $("#inp_meter_awal").val("<?php echo $d_edit_m['meter_awal']; ?>");
-                        $("#inp_meter_akhir").val("<?php echo $d_edit_m['meter_akhir']; ?>");
-                        $("#btn_meter_submit").attr("value", "meter_edit").text("Simpan Perubahan");
-                        $('html, body').animate({ scrollTop: $("#catat_meter_add").offset().top - 80 }, 400);
-                    });
-                    </script>
-                    <?php } } ?>
+                // Scroll otomatis ke form edit jika mode edit
+                if ($edit_m): ?>
+                <script>
+                document.addEventListener('DOMContentLoaded', function() {
+                    var el = document.getElementById('catat_meter_add');
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+                </script>
+                <?php endif; ?>
 
 
 
@@ -1190,7 +1216,25 @@ if (isset($_POST['tombol'])) {
             </div>
         </div>
 
-
+        <div class="modal fade" id="myModalUser" tabindex="-1" aria-labelledby="myModalUserLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header bg-danger text-white">
+                        <h5 class="modal-title" id="myModalUserLabel"><i class="fas fa-trash me-2"></i>Konfirmasi Hapus User</h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        Yakin hapus user <strong id="modal_username_text"></strong>? Tindakan ini tidak dapat dibatalkan.
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Batal</button>
+                        <a id="modal_user_hapus_link" href="#" class="btn btn-danger">
+                            <i class="fas fa-trash me-1"></i> Ya, Hapus
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
 
         <footer class="py-4 bg-light mt-auto">
             <div class="container-fluid px-4">
@@ -1254,15 +1298,6 @@ $(document).ready(function() {
         });
     }
 
-    // ─── Tombol Tambah User toggle form ──────────────────────────
-    $('#btn_tambah_user').click(function() {
-        $('#user_add').slideToggle(300, function() {
-            if ($(this).is(':visible')) {
-                $('html, body').animate({ scrollTop: $('#user_add').offset().top - 80 }, 400);
-            }
-        });
-    });
-
     // ─── Tombol Tambah Tarif toggle form ─────────────────────────
     $('#btn_tambah_tarif').click(function() {
         $('#tarif_add').slideToggle();
@@ -1284,6 +1319,14 @@ $(document).ready(function() {
         var id_p   = btn.data('id_pelanggan');
         $(this).find('#modal_id_meter_hidden').val(id_m);
         $(this).find('#modal_id_meter_text').text(id_p);
+    });
+
+    // ─── Modal Hapus User: set link href ─────────────────────────
+    $('#myModalUser').on('show.bs.modal', function(event) {
+        var btn      = $(event.relatedTarget);
+        var username = btn.data('username');
+        $(this).find('#modal_username_text').text(username);
+        $(this).find('#modal_user_hapus_link').attr('href', 'index.php?p=user_hapus&user=' + encodeURIComponent(username));
     });
 
 
