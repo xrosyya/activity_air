@@ -44,15 +44,18 @@ $li = "Dashboard";
 if (!empty($page)) {
     $routes = [
         "user"                                          => ["Manajemen User",                                    "Menu untuk CRUD User"],
-        "pemakaian_warga"                               => ["Lihat Pemakaian Warga",                             "Lihat Data Pemakaian Air Warga"],
+        "pemakaian_warga"                               => ["Manajemen Pemakaian Air Warga",                    "Manajemen Pemakaian Air Warga"],
         "pembayaran_warga"                              => ["Lihat Pembayaran Warga",                            "Lihat Data Pembayaran Air Warga"],
         "ubah_datameter_warga"                          => ["Ubah Data Meter Warga",                             "Ubah Data Meter Air Warga"],
         "menghapus_datameter_air_warga"                 => ["Menghapus Data Meter Warga",                        "Menghapus Data Meter Air Warga"],
         "melihat_tagihan_seluruh_warga"                 => ["Melihat Tagihan Seluruh Warga",                     "Melihat Tagihan Seluruh Warga"],
         "melihat_infografis_tagihan_warga"              => ["Melihat Infografis Tagihan Warga",                  "Melihat Infografis Tagihan Warga"],
         "tarif"                                         => ["Manajemen Tarif Air",                               "Manajemen Tarif Air"],
-        "catat_meter"                                   => ["Catat Meter", "Daftar pencatatan meter air warga"],
-        "lihat_data_pemakaian"                          => ["Lihat Data Pemakaian", "Daftar pencatatan meter air warga"],
+        "tarif_edit"                                    => ["Manajemen Tarif Air",                               "Edit Data Tarif Air"],
+        "catat_meter"                                   => ["Catat Meter",                                       "Daftar pencatatan meter air warga"],
+        "meter_edit"                                    => ["Catat Meter",                                       "Edit Data Meter Air Warga"],
+        "user_edit"                                     => ["Manajemen User",                                    "Edit Data User"],
+        "lihat_data_pemakaian"                          => ["Lihat Data Pemakaian",                              "Daftar pencatatan meter air warga"],
         "mengubah_datameter_air_warga_dalam_satu_bulan" => ["Mengubah Datameter Air Warga Dalam Satu Bulan",     "Mengubah Datameter Air Warga Dalam Satu Bulan"],
         "melihat_jumlah_total_pelanggan"                => ["Melihat Jumlah Total Pelanggan",                    "Melihat Jumlah Total Pelanggan"],
         "melihat_jumlah_pemakaian_air_seluruh_warga"    => ["Melihat Jumlah Pemakaian Air Seluruh Warga",        "Melihat Jumlah Pemakaian Air Seluruh Warga"],
@@ -60,11 +63,24 @@ if (!empty($page)) {
         "memantau_air_tiap_bulan"                       => ["Memantau Air Tiap Bulan",                           "Memantau Air Tiap Bulan"],
         "melihat_tagihan_tiap_bulan"                    => ["Melihat Tagihan Tiap Bulan",                        "Melihat Tagihan Tiap Bulan"],
         "melihat_infografis_pemakaian_dan_tagihan_perbulan" => ["Melihat Infografis Pemakaian Dan Tagihan Perbulan", "Melihat Infografis Pemakaian Dan Tagihan Perbulan"],
+        "pemakaian_sendiri" => ["Pemakaian & Tagihan Air", "Data Pemakaian & Tagihan Air"],
     ];
 
     if (isset($routes[$page])) {
         $h1 = $routes[$page][0];
         $li = $routes[$page][1];
+    }
+
+    // Override judul meter_edit sesuai konteks asal halaman
+    if ($page === 'meter_edit') {
+        $dari_ctx = trim($_GET['dari'] ?? '');
+        if ($dari_ctx === 'pemakaian_warga') {
+            $h1 = "Manajemen Pemakaian Air Warga";
+            $li = "Edit Data Meter Air Warga";
+        } else {
+            $h1 = "Catat Meter";
+            $li = "Edit Data Meter Air Warga";
+        }
     }
 }
 
@@ -212,6 +228,9 @@ if (isset($_POST['tombol'])) {
         $waktu   = mysqli_real_escape_string($koneksi, trim($_POST['waktu']));
         $m_awal  = mysqli_real_escape_string($koneksi, trim($_POST['meter_awal']));
         $m_akhir = mysqli_real_escape_string($koneksi, trim($_POST['meter_akhir']));
+        $status_add = mysqli_real_escape_string($koneksi, trim($_POST['status'] ?? 'BELUM BAYAR'));
+        // Validasi nilai status
+        if (!in_array($status_add, ['LUNAS', 'BELUM BAYAR'])) $status_add = 'BELUM BAYAR';
         $pakai   = (float)$m_akhir - (float)$m_awal;
 
         // Validasi: meter akhir harus lebih besar dari meter awal
@@ -235,13 +254,14 @@ if (isset($_POST['tombol'])) {
         $tagihan  = (float)$pakai * (float)($d_tarif['tarif'] ?? 0);
 
         mysqli_query($koneksi, "INSERT INTO pemakaian (username, meter_awal, meter_akhir, pemakaian, tgl, waktu, kd_tarif, tagihan, status) 
-                                VALUES ('$id_pel', '$m_awal', '$m_akhir', '$pakai', '$tgl', '$waktu', '$kd_tarif', '$tagihan', 'BELUM BAYAR')");
+                                VALUES ('$id_pel', '$m_awal', '$m_akhir', '$pakai', '$tgl', '$waktu', '$kd_tarif', '$tagihan', '$status_add')");
         if (mysqli_affected_rows($koneksi) > 0) {
             $_SESSION['notif'] = ['type' => 'success', 'msg' => "Data meter berhasil disimpan."];
         } else {
             $_SESSION['notif'] = ['type' => 'danger', 'msg' => "Gagal menyimpan data: " . mysqli_error($koneksi)];
         }
-        header("Location: index.php?p=catat_meter");
+        $dari_add = mysqli_real_escape_string($koneksi, trim($_POST['dari'] ?? ''));
+        header("Location: index.php?p=" . ($dari_add ?: 'catat_meter'));
         exit;
     }
 
@@ -317,22 +337,22 @@ if (isset($_POST['tombol'])) {
         <link rel="stylesheet" href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css"/>
         <style>
             #tarif_table_wrapper .dataTables_filter input {
-                border-radius: 8px; border: 1px solid #1cc88a; padding: 5px 12px;
+                border-radius: 8px; border: 1px solid #4e73df; padding: 5px 12px;
             }
             #tarif_table_wrapper .dataTables_filter input:focus {
-                outline: none; box-shadow: 0 0 0 0.15rem rgba(28,200,138,.25); border-color: #1cc88a;
+                outline: none; box-shadow: 0 0 0 0.15rem rgba(78,115,223,.25); border-color: #4e73df;
             }
             #tarif_table_wrapper .dataTables_length select {
-                border-radius: 8px; border: 1px solid #1cc88a; padding: 4px 8px;
+                border-radius: 8px; border: 1px solid #4e73df; padding: 4px 8px;
             }
             #tarif_table_wrapper .dataTables_paginate .paginate_button.current,
             #tarif_table_wrapper .dataTables_paginate .paginate_button.current:hover {
-                background: #1cc88a !important; border-color: #1cc88a !important;
+                background: #4e73df !important; border-color: #4e73df !important;
                 color: #fff !important; border-radius: 6px;
             }
             #tarif_table_wrapper .dataTables_paginate .paginate_button:hover {
-                background: #e8f5e9 !important; border-color: #1cc88a !important;
-                color: #1cc88a !important; border-radius: 6px;
+                background: #eaecf4 !important; border-color: #4e73df !important;
+                color: #4e73df !important; border-radius: 6px;
             }
             /* ===== CSS CATAT METER ===== */
             #meter_table_wrapper .dataTables_filter input {
@@ -354,6 +374,12 @@ if (isset($_POST['tombol'])) {
                 color: #4e73df !important; border-radius: 6px;
             }
 
+        /* ===== OVERRIDE SIDEBAR ICON COLORS — semua biru ===== */
+        .sb-sidenav-dark .sb-sidenav-menu .nav-link .sb-nav-link-icon,
+        .sb-sidenav-dark .sb-sidenav-menu .nav-link .sb-nav-link-icon i,
+        #layoutSidenav_nav .nav-link i {
+            color: #4e73df !important;
+        }
         </style>
     </head>
     <body class="sb-nav-fixed">
@@ -398,42 +424,42 @@ if (isset($_POST['tombol'])) {
 
                     <a class="nav-link" href="index.php">
                         <div class="sb-nav-link-icon">
-                            <i class="fas fa-tachometer-alt fa-spin text-success"></i>
+                            <i class="fas fa-tachometer-alt fa-spin" style="color:#4e73df"></i>
                         </div>
                         Dashboard
                     </a>
 
                     <?php if ($level == "admin") : ?>
                         <a class="nav-link" href="index.php?p=user">
-                            <div class="sb-nav-link-icon"><i class="fas fa-users text-info"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-users" style="color:#4e73df"></i></div>
                             Manajemen User
                         </a>
                         <a class="nav-link" href="index.php?p=tarif">
-                            <div class="sb-nav-link-icon"><i class="fas fa-tags text-warning"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-tags" style="color:#4e73df"></i></div>
                             Manajemen Tarif
                         </a>
-                        <a class="nav-link" href="index.php?p=catat_meter">
-                            <div class="sb-nav-link-icon"><i class="fas fa-tint text-primary"></i></div>
+                        <a class="nav-link" href="index.php?p=pemakaian_warga">
+                            <div class="sb-nav-link-icon"><i class="fas fa-tint" style="color:#4e73df"></i></div>
                             Lihat Pemakaian Warga
                         </a>
                         <a class="nav-link" href="index.php?p=pembayaran_warga">
-                            <div class="sb-nav-link-icon"><i class="fas fa-money-bill text-success"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-money-bill" style="color:#4e73df"></i></div>
                             Pembayaran Warga
                         </a>
 
                     <?php elseif ($level === "bendahara") : ?>
                         <a class="nav-link" href="index.php?p=tarif">
-                            <div class="sb-nav-link-icon"><i class="fas fa-tags text-warning"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-tags" style="color:#4e73df"></i></div>
                             Manajemen Tarif
                         </a>
                         <a class="nav-link" href="index.php?p=pemakaian_warga">
-                            <div class="sb-nav-link-icon"><i class="fas fa-tint text-primary"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-tint" style="color:#4e73df"></i></div>
                             Lihat Pemakaian Warga
                         </a>
 
                     <?php elseif ($level === "petugas") : ?>
                         <a class="nav-link" href="index.php?p=catat_meter">
-                            <div class="sb-nav-link-icon"><i class="fas fa-plus-circle text-success"></i></div>
+                            <div class="sb-nav-link-icon"><i class="fas fa-plus-circle" style="color:#4e73df"></i></div>
                             Catat Meter
                         </a>
                         <!-- <a class="nav-link" href="index.php?p=mengubah_datameter_air_warga_dalam_satu_bulan">
@@ -454,17 +480,9 @@ if (isset($_POST['tombol'])) {
                         </a>
 
                     <?php elseif ($level === "warga") : ?>
-                        <a class="nav-link" href="index.php?p=memantau_air_tiap_bulan">
-                            <div class="sb-nav-link-icon"><i class="fas fa-tint text-primary"></i></div>
-                            Memantau Air Tiap Bulan
-                        </a>
-                        <a class="nav-link" href="index.php?p=melihat_tagihan_tiap_bulan">
-                            <div class="sb-nav-link-icon"><i class="fas fa-file-invoice text-warning"></i></div>
-                            Melihat Tagihan Tiap Bulan
-                        </a>
-                        <a class="nav-link" href="index.php?p=melihat_infografis_pemakaian_dan_tagihan_perbulan">
-                            <div class="sb-nav-link-icon"><i class="fas fa-chart-bar text-success"></i></div>
-                            Melihat Infografis Pemakaian Dan Tagihan Perbulan
+                        <a class="nav-link" href="index.php?p=pemakaian_sendiri">
+                            <div class="sb-nav-link-icon"><i class="fas fa-tint" style="color:#4e73df"></i></div>
+                            Lihat Pemakaian
                         </a>
                     <?php endif; ?>
 
@@ -472,7 +490,7 @@ if (isset($_POST['tombol'])) {
             </div>
             <div class="sb-sidenav-footer">
                 <div class="small">
-                    <i class="fa-regular fa-user fa-flip text-warning"></i>
+                    <i class="fa-regular fa-user fa-flip" style="color:#4e73df"></i>
                     Logged in as: <?php echo htmlspecialchars($dt_user[2]); ?>
                 </div>
                 <?php echo htmlspecialchars($dt_user[0]) . ' (' . htmlspecialchars($dt_user[1]) . ')'; ?>
@@ -496,7 +514,7 @@ if (isset($_POST['tombol'])) {
                     <?php unset($_SESSION['notif']); ?>
                 <?php endif; ?>
 
-                <div class="row" id="summary" <?php echo ($page === 'pemakaian_warga') ? 'style="display:none!important;"' : ''; ?>>
+                <div class="row" id="summary" <?php echo (in_array($page, ['pemakaian_warga','pemakaian_sendiri'])) ? 'style="display:none!important;"' : ''; ?>>
                     <div class="col-xl-3 col-md-6">
                         <div class="card bg-primary text-white mb-4">
                             <div class="card-body">Primary Card</div>
@@ -535,7 +553,7 @@ if (isset($_POST['tombol'])) {
                     </div>
                 </div>
 
-                <div class="row" id="chart" <?php echo ($page === 'pemakaian_warga') ? 'style="display:none!important;"' : ''; ?>>
+                <div class="row" id="chart" <?php echo (in_array($page, ['pemakaian_warga','pemakaian_sendiri'])) ? 'style="display:none!important;"' : ''; ?>>
                     <div class="col-xl-6">
                         <div class="card mb-4">
                             <div class="card-header">
@@ -590,23 +608,43 @@ if (isset($_POST['tombol'])) {
                     // ditampilkan di blok notif utama di atas
                 }
                 ?>
-                <div id="user_add" class="card mb-4" style="display: <?php echo (in_array($page, ['user', 'user_edit'])) ? $display_form : 'none'; ?>;"><?php // hanya tampil di halaman user ?>
-                    <div class="card-header d-flex align-items-center gap-2">
-                        <?php if($mode == 'user_edit'): ?>
-                            <i class="fa-solid fa-user-pen me-1 text-warning fa-fade"></i>
-                            <span>Edit User &mdash; <strong><?php echo htmlspecialchars($user); ?></strong></span>
-                        <?php else: ?>
-                            <i class="fa-solid fa-users me-1 text-success fa-fade"></i>
-                            <span>Tambah User</span>
-                        <?php endif; ?>
+                <div id="user_add" class="card mb-4 shadow-sm" style="display: <?php echo (in_array($page, ['user', 'user_edit'])) ? $display_form : 'none'; ?>;"><?php // hanya tampil di halaman user ?>
+                    <div class="card-header d-flex align-items-center justify-content-between py-3" style="background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%); border-bottom: 2px solid #4e73df;">
+                        <div class="d-flex align-items-center gap-2">
+                            <?php if($mode == 'user_edit'): ?>
+                                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#4e73df;">
+                                    <i class="fa-solid fa-user-pen text-white fa-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark" style="font-size:1rem;">Edit User</div>
+                                    <div class="text-muted" style="font-size:0.8rem;">Mengubah data: <strong><?php echo htmlspecialchars($user); ?></strong></div>
+                                </div>
+                            <?php else: ?>
+                                <div class="rounded-circle d-flex align-items-center justify-content-center" style="width:36px;height:36px;background:#4e73df;">
+                                    <i class="fa-solid fa-user-plus text-white fa-sm"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold text-dark" style="font-size:1rem;">Tambah User Baru</div>
+                                    <div class="text-muted" style="font-size:0.8rem;">Isi semua data yang diperlukan</div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+                        <a href="index.php?p=user" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i> Batal
+                        </a>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body p-4">
 
                         <?php if($mode == 'user_edit'): ?>
                         <!-- INFO CARD: username dikunci saat edit -->
-                        <div class="alert alert-info d-flex align-items-center gap-2 py-2 mb-4" style="border-left: 4px solid #0dcaf0;">
-                            <i class="fas fa-lock"></i>
-                            <span>Mode Edit &mdash; Username <strong><?php echo htmlspecialchars($user); ?></strong> terkunci. Ubah data lain sesuai kebutuhan.</span>
+                        <div class="d-flex align-items-center gap-3 p-3 mb-4 rounded-3" style="background:#fff8e1; border-left: 4px solid #ffc107;">
+                            <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0" style="width:32px;height:32px;background:#ffc107;">
+                                <i class="fas fa-lock text-white fa-xs"></i>
+                            </div>
+                            <div>
+                                <div class="fw-semibold text-dark" style="font-size:0.9rem;">Mode Edit Aktif</div>
+                                <div class="text-muted" style="font-size:0.82rem;">Username <strong><?php echo htmlspecialchars($user); ?></strong> terkunci. Ubah data lain sesuai kebutuhan.</div>
+                            </div>
                         </div>
                         <?php endif; ?>
 
@@ -721,16 +759,14 @@ if (isset($_POST['tombol'])) {
                             </div>
 
                             <!-- TOMBOL AKSI -->
-                            <div class="d-flex gap-2 mt-4 pt-2 border-top">
+                            <div class="d-flex gap-2 mt-4 pt-3 border-top">
                                 <button type="submit" class="btn <?php echo $mode == 'user_edit' ? 'btn-warning' : 'btn-primary'; ?> px-4">
                                     <i class="fas <?php echo $mode == 'user_edit' ? 'fa-save' : 'fa-plus'; ?> me-1"></i>
                                     <?php echo $txt_tombol; ?>
                                 </button>
-                                <?php if($mode == "user_edit"): ?>
-                                    <a href="index.php?p=user" class="btn btn-secondary px-4">
-                                        <i class="fas fa-times me-1"></i> Batal
-                                    </a>
-                                <?php endif; ?>
+                                <a href="index.php?p=user" class="btn btn-outline-secondary px-4">
+                                    <i class="fas fa-arrow-left me-1"></i> Batal
+                                </a>
                             </div>
 
                         </form>
@@ -738,7 +774,7 @@ if (isset($_POST['tombol'])) {
                 </div>
                 <div class="card mb-4" id="user_list" style="display:<?php echo in_array($page, ['user','user_edit']) ? 'block' : 'none'; ?>;">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <span><i class="fa-solid fa-users me-2 text-success fa-fade"></i> Data User</span>
+                        <span><i class="fa-solid fa-users me-2 text-primary fa-fade"></i> Data User</span>
                     </div>
                     <div class="card-body table-responsive">
                         <table id="datatablesSimple" class="table table-bordered table-striped table-hover align-middle mb-0">
@@ -790,7 +826,7 @@ if (isset($_POST['tombol'])) {
                                         <td class='text-center'>$tipe</td>
                                         <td class='text-center'>$badge_status</td>
                                         <td class='text-center' style='white-space:nowrap;'>
-                                            <a href='index.php?p=user_edit&user=$user' class='btn btn-success btn-sm' title='Edit'>
+                                            <a href='index.php?p=user_edit&user=$user' class='btn btn-primary btn-sm' title='Edit'>
                                                 <i class='fas fa-edit'></i>
                                             </a>
                                             <button type='button' class='btn btn-danger btn-sm' title='Hapus'
@@ -807,24 +843,24 @@ if (isset($_POST['tombol'])) {
                     </div>
                 </div>
 
-                <div class="card mb-4 shadow-sm" id="tarif_list" style="display:<?php echo (in_array($page, ['tarif', 'tarif_edit'])) ? 'block' : 'none'; ?>; border-top: 4px solid #1cc88a; border-radius: 0.5rem;">
-                    <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8fff8 0%, #e8f5e9 100%);">
+                <div class="card mb-4 shadow-sm" id="tarif_list" style="display:<?php echo (in_array($page, ['tarif', 'tarif_edit'])) ? 'block' : 'none'; ?>; border-top: 4px solid #4e73df; border-radius: 0.5rem;">
+                    <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f0f4ff 0%, #e8eeff 100%);">
                         <div class="d-flex align-items-center gap-2">
-                            <div style="background:#1cc88a;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                            <div style="background:#4e73df;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
                                 <i class="fas fa-tags text-white"></i>
                             </div>
                             <div>
-                                <h6 class="m-0 fw-bold text-success">Data Tarif Air</h6>
+                                <h6 class="m-0 fw-bold text-primary">Data Tarif Air</h6>
                                 <small class="text-muted">Daftar seluruh tarif yang tersedia</small>
                             </div>
                         </div>
-                        <button type="button" id="btn_tambah_tarif" class="btn btn-success d-flex align-items-center gap-2" style="border-radius:8px; padding:8px 18px; font-weight:600;">
+                        <button type="button" id="btn_tambah_tarif" class="btn btn-primary d-flex align-items-center gap-2" style="border-radius:8px; padding:8px 18px; font-weight:600;">
                             <i class="fas fa-plus"></i> Tambah Tarif
                         </button>
                     </div>
                     <div class="card-body">
                         <table id="tarif_table" class="table table-hover align-middle w-100" style="font-size:0.95rem;">
-                            <thead style="background:#f1f9f1;">
+                            <thead style="background:#eef2ff;">
                                 <tr>
                                     <th class="text-secondary fw-semibold" style="width:60px;">No</th>
                                     <th class="text-secondary fw-semibold">ID Tarif</th>
@@ -851,7 +887,7 @@ if (isset($_POST['tombol'])) {
                                             <td class='text-muted'>$no</td>
                                             <td><span class='fw-bold text-dark'>$id_t</span></td>
                                             <td>$tipe</td>
-                                            <td class='fw-semibold text-success'>Rp " . number_format($harga, 0, ',', '.') . "</td>
+                                            <td class='fw-semibold text-primary'>Rp " . number_format($harga, 0, ',', '.') . "</td>
                                             <td class='text-center'>$badge</td>
                                             <td class='text-center'>
                                                 <a href='index.php?p=tarif_edit&id=$id_t' class='btn btn-sm btn-warning me-1' style='min-width:75px;'>
@@ -882,9 +918,9 @@ if (isset($_POST['tombol'])) {
                     if ($edit_t) $tarif_add_display = 'block';
                 }
                 ?>
-                <div id="tarif_add" class="card mb-4" style="display: <?php echo $tarif_add_display; ?>; border-top: 4px solid #1cc88a; box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,0.15);">
+                <div id="tarif_add" class="card mb-4" style="display: <?php echo $tarif_add_display; ?>; border-top: 4px solid #4e73df; box-shadow: 0 .15rem 1.75rem 0 rgba(58,59,69,0.15);">
                     <div class="card-header bg-white py-3">
-                        <h5 class="m-0 fw-bold text-success">
+                        <h5 class="m-0 fw-bold text-primary">
                             <i class="fas <?php echo $edit_t ? 'fa-edit' : 'fa-plus-circle'; ?> me-2"></i>
                             <?php echo $edit_t ? 'Edit Data Tarif' : 'Form Input Data Tarif'; ?>
                         </h5>
@@ -941,7 +977,7 @@ if (isset($_POST['tombol'])) {
                                         <div class="form-check form-check-inline">
                                             <input class="form-check-input" type="radio" name="status" id="st_aktif" value="aktif"
                                                 <?php echo ($status_db == 'aktif') ? 'checked' : ''; ?> required>
-                                            <label class="form-check-label fw-bold text-success fs-6" for="st_aktif">
+                                            <label class="form-check-label fw-bold text-primary fs-6" for="st_aktif">
                                                 <i class="fas fa-check-circle me-1"></i> Aktif
                                             </label>
                                         </div>
@@ -960,7 +996,7 @@ if (isset($_POST['tombol'])) {
                                 <a href="index.php?p=tarif" class="btn btn-secondary btn-lg px-4">
                                     <i class="fas fa-arrow-left me-1"></i> Batal
                                 </a>
-                                <button type="submit" class="btn btn-success btn-lg px-5" name="tombol"
+                                <button type="submit" class="btn btn-primary btn-lg px-5" name="tombol"
                                     value="<?php echo $edit_t ? 'tarif_edit' : 'tarif_add'; ?>">
                                     <i class="fas fa-save me-1"></i> <?php echo $edit_t ? 'Update Data' : 'Simpan Data'; ?>
                                 </button>
@@ -970,6 +1006,10 @@ if (isset($_POST['tombol'])) {
                 </div>
 
                 <div class="card mb-4 shadow-sm" id="catat_meter_list" style="display:<?php echo (in_array($page, ['catat_meter', 'meter_edit', 'lihat_data_pemakaian'])) ? 'block' : 'none'; ?>; border-top: 4px solid #4e73df; border-radius: 0.5rem;">
+                    <?php
+                    $level_cm = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
+                    $is_admin_cm = ($level_cm === 'admin');
+                    ?>
                     <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8f9ff 0%, #eaecf4 100%);">
                         <div class="d-flex align-items-center gap-2">
                             <div style="background:#4e73df;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
@@ -980,7 +1020,7 @@ if (isset($_POST['tombol'])) {
                                 <small class="text-muted">Pencatatan Meter Air Warga</small>
                             </div>
                         </div>
-                        <?php if ($page !== 'lihat_data_pemakaian'): ?>
+                        <?php if ($page !== 'lihat_data_pemakaian' && $level_cm !== 'admin'): ?>
                         <button type="button" id="btn_tambah_meter" class="btn btn-primary d-flex align-items-center gap-2" style="border-radius:8px; padding:8px 18px; font-weight:600;">
                             <i class="fas fa-plus"></i> Meter
                         </button>
@@ -997,11 +1037,6 @@ if (isset($_POST['tombol'])) {
                                   </div>";
                             unset($_SESSION['notif']);
                         }
-                        ?>
-                        <?php
-                        // Cek apakah admin: tampilkan tabel lengkap (seperti pemakaian_warga) 
-                        $level_cm = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
-                        $is_admin_cm = ($level_cm === 'admin');
                         ?>
                         <table id="meter_table">
                             <thead>
@@ -1116,28 +1151,38 @@ if (isset($_POST['tombol'])) {
                     }
                 }
                 ?>
-                <div id="catat_meter_add" class="card mb-4" style="display: <?php echo $edit_m_display; ?>;">
-                    <div class="card-header">
-                        <i class="fas fa-tachometer-alt fa-fade me-1" style="color: rgb(99, 230, 190);"></i>
-                        <?php echo $edit_m ? 'Edit Data Meter' : 'Catat Meter'; ?>
+                <?php
+                // Tentukan apakah form ini ditampilkan di konteks pemakaian_warga (admin)
+                $is_pw_context = (isset($_GET['dari']) && $_GET['dari'] === 'pemakaian_warga') || ($page === 'pemakaian_warga');
+                $back_url = $is_pw_context ? 'index.php?p=pemakaian_warga' : 'index.php?p=catat_meter';
+                $level_form = strtolower(trim($dt_user_row['level'] ?? $_SESSION['level'] ?? ''));
+                $show_status_field = ($level_form === 'admin' || $level_form === 'bendahara');
+                ?>
+                <div id="catat_meter_add" class="card mb-4 shadow-sm" style="display: <?php echo $edit_m_display; ?>; border-top: 4px solid #4e73df; border-radius: 0.5rem;">
+                    <div class="card-header py-3 d-flex align-items-center gap-2" style="background: linear-gradient(135deg, #f8f9ff 0%, #eaecf4 100%);">
+                        <div style="background:#4e73df;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                            <i class="fas fa-<?php echo $edit_m ? 'edit' : 'plus'; ?> text-white" style="font-size:0.85rem;"></i>
+                        </div>
+                        <div>
+                            <h6 class="m-0 fw-bold text-primary"><?php echo $edit_m ? 'Edit Data Meter' : 'Catat Meter'; ?></h6>
+                            <small class="text-muted"><?php echo $edit_m ? 'Perbarui data pencatatan meter air' : 'Tambah pencatatan meter air warga'; ?></small>
+                        </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body px-4 py-4">
                         <form id="meter_form" method="POST" action="index.php">
-                            <!-- id_meter: langsung di-set dari PHP, bukan JS -->
                             <input type="hidden" name="id_meter" id="form_id_meter" value="<?php echo $edit_m ? (int)$edit_m['no'] : ''; ?>">
                             <input type="hidden" name="tgl" id="inp_tgl" value="<?php echo $edit_m ? htmlspecialchars($edit_m['tgl']) : date('Y-m-d'); ?>">
                             <input type="hidden" name="waktu" id="inp_waktu" value="<?php echo $edit_m ? htmlspecialchars(substr($edit_m['waktu'], 0, 5)) : date('H:i'); ?>">
 
-                            <div class="mb-3">
-                                <label class="form-label">Nama Warga:</label>
+                            <!-- Nama Warga -->
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold text-dark">Nama Warga</label>
                                 <?php if ($edit_m): ?>
-                                    <!-- Mode edit: nama terkunci -->
-                                    <input type="text" class="form-control bg-light" value="<?php echo htmlspecialchars($edit_m['nama'] ?? $edit_m['username']); ?>" readonly>
+                                    <input type="text" class="form-control bg-light text-muted" value="<?php echo htmlspecialchars($edit_m['nama'] ?? $edit_m['username']); ?>" readonly>
                                     <input type="hidden" name="id_pelanggan" value="<?php echo htmlspecialchars($edit_m['username']); ?>">
                                 <?php else: ?>
-                                    <!-- Mode tambah: dropdown pilih warga -->
                                     <select class="form-select" name="id_pelanggan" id="sel_id_pelanggan" required>
-                                        <option value="">-- Pilih Warga --</option>
+                                        <option value="">- Pilih Warga -</option>
                                         <?php
                                         $qwarga = mysqli_query($koneksi, "SELECT username, nama FROM login WHERE LOWER(level)='warga' ORDER BY nama ASC");
                                         while ($dw = mysqli_fetch_assoc($qwarga)) {
@@ -1150,43 +1195,63 @@ if (isset($_POST['tombol'])) {
                                 <?php endif; ?>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label">Meter Awal (m³):</label>
-                                <input type="number" class="form-control" name="meter_awal" id="inp_meter_awal"
-                                    placeholder="0" min="0" step="0.01" required
-                                    value="<?php echo $edit_m ? htmlspecialchars($edit_m['meter_awal']) : ''; ?>">
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Meter Akhir (m³):</label>
-                                <input type="number" class="form-control" name="meter_akhir" id="inp_meter_akhir"
-                                    placeholder="0" min="0" step="0.01" required
-                                    value="<?php echo $edit_m ? htmlspecialchars($edit_m['meter_akhir']) : ''; ?>">
-                            </div>
-
-                            <?php if ($edit_m): ?>
-                            <div class="mb-3">
-                                <label class="form-label">Status:</label><br>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="status" id="status_lunas" value="LUNAS"
-                                        <?php echo (($edit_m['status'] ?? '') === 'LUNAS') ? 'checked' : ''; ?>>
-                                    <label class="form-check-label" for="status_lunas">LUNAS</label>
+                            <!-- Meter Awal & Akhir -->
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-dark">Meter Awal (m³)</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white text-muted"><i class="fas fa-tint"></i></span>
+                                        <input type="number" class="form-control" name="meter_awal" id="inp_meter_awal"
+                                            placeholder="0" min="0" step="0.01" required
+                                            value="<?php echo $edit_m ? htmlspecialchars($edit_m['meter_awal']) : ''; ?>">
+                                        <span class="input-group-text bg-white text-muted">m³</span>
+                                    </div>
                                 </div>
-                                <div class="form-check form-check-inline">
-                                    <input class="form-check-input" type="radio" name="status" id="status_blm" value="BELUM BAYAR"
-                                        <?php echo (($edit_m['status'] ?? '') !== 'LUNAS') ? 'checked' : ''; ?>>
-                                    <label class="form-check-label" for="status_blm">BLM LUNAS</label>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-semibold text-dark">Meter Akhir (m³)</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-white text-muted"><i class="fas fa-tint-slash"></i></span>
+                                        <input type="number" class="form-control" name="meter_akhir" id="inp_meter_akhir"
+                                            placeholder="0" min="0" step="0.01" required
+                                            value="<?php echo $edit_m ? htmlspecialchars($edit_m['meter_akhir']) : ''; ?>">
+                                        <span class="input-group-text bg-white text-muted">m³</span>
+                                    </div>
                                 </div>
                             </div>
+
+                            <!-- Status Tagihan (tampil untuk admin/bendahara) -->
+                            <?php if ($show_status_field): ?>
+                            <div class="mb-4">
+                                <label class="form-label fw-semibold text-dark">Status Tagihan</label>
+                                <?php
+                                $cur_status = $edit_m ? ($edit_m['status'] ?? 'BELUM BAYAR') : 'BELUM BAYAR';
+                                ?>
+                                <select class="form-select" name="status" id="inp_status">
+                                    <option value="BELUM BAYAR" <?php echo ($cur_status !== 'LUNAS') ? 'selected' : ''; ?>>Belum Lunas</option>
+                                    <option value="LUNAS" <?php echo ($cur_status === 'LUNAS') ? 'selected' : ''; ?>>Lunas</option>
+                                </select>
+                            </div>
+                            <?php else: ?>
+                                <?php if ($edit_m): ?>
+                                    <input type="hidden" name="status" value="<?php echo htmlspecialchars($edit_m['status'] ?? 'BELUM BAYAR'); ?>">
+                                <?php else: ?>
+                                    <input type="hidden" name="status" value="BELUM BAYAR">
+                                <?php endif; ?>
                             <?php endif; ?>
 
-                            <input type="hidden" name="dari" value="<?php echo isset($_GET['dari']) ? htmlspecialchars($_GET['dari']) : ''; ?>">
+                            <input type="hidden" name="dari" value="<?php echo isset($_GET['dari']) ? htmlspecialchars($_GET['dari']) : ($is_pw_context ? 'pemakaian_warga' : ''); ?>">
 
-                            <button type="submit" class="btn btn-primary" name="tombol" id="btn_meter_submit"
-                                value="<?php echo $edit_m ? 'meter_edit' : 'meter_add'; ?>">
-                                <?php echo $edit_m ? 'Simpan Perubahan' : 'Simpan'; ?>
-                            </button>
-                            <a href="index.php?p=<?php echo (isset($_GET['dari']) && $_GET['dari'] === 'pemakaian_warga') ? 'pemakaian_warga' : 'catat_meter'; ?>" class="btn btn-secondary ms-2">Batal</a>
+                            <hr class="my-4">
+                            <div class="d-flex gap-2 justify-content-start">
+                                <button type="submit" class="btn btn-primary px-4" name="tombol" id="btn_meter_submit"
+                                    value="<?php echo $edit_m ? 'meter_edit' : 'meter_add'; ?>">
+                                    <i class="fas fa-save me-1"></i>
+                                    <?php echo $edit_m ? 'Simpan Perubahan' : 'Simpan'; ?>
+                                </button>
+                                <a href="<?php echo $back_url; ?>" class="btn btn-outline-secondary px-4">
+                                    <i class="fas fa-times me-1"></i> Batal
+                                </a>
+                            </div>
                         </form>
                     </div>
                 </div>
@@ -1209,17 +1274,22 @@ if (isset($_POST['tombol'])) {
                 ?>
 
                 <!-- PEMAKAIAN WARGA (khusus bendahara) -->
-                <div class="card mb-4 shadow-sm" id="pemakaian_warga_list" style="display:<?php echo ($page === 'pemakaian_warga') ? 'block' : 'none'; ?>; border-top: 4px solid #1cc88a; border-radius: 0.5rem;">
+                <div class="card mb-4 shadow-sm" id="pemakaian_warga_list" style="display:<?php echo ($page === 'pemakaian_warga') ? 'block' : 'none'; ?>; border-top: 4px solid #4e73df; border-radius: 0.5rem;">
                     <div class="card-header py-3 d-flex justify-content-between align-items-center" style="background: linear-gradient(135deg, #f8f9ff 0%, #eaecf4 100%);">
                         <div class="d-flex align-items-center gap-2">
-                            <div style="background:#1cc88a;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
-                                <i class="fas fa-tint text-white"></i>
+                            <div style="background:#4e73df;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                                <i class="fas fa-tachometer-alt text-white"></i>
                             </div>
                             <div>
-                                <h6 class="m-0 fw-bold text-success">Data Meter Warga</h6>
+                                <h6 class="m-0 fw-bold text-primary">Pencatatan Meter</h6>
                                 <small class="text-muted">Pencatatan Meter Air Warga</small>
                             </div>
                         </div>
+                        <?php if ($level_cm === 'admin'): ?>
+                        <button type="button" id="btn_tambah_meter_pw" class="btn btn-primary d-flex align-items-center gap-2" style="border-radius:8px; padding:8px 18px; font-weight:600;">
+                            <i class="fas fa-plus"></i> Meter
+                        </button>
+                        <?php endif; ?>
                     </div>
                     <div class="card-body">
                         <table id="pemakaian_warga_table" style="width:100%">
@@ -1281,6 +1351,72 @@ if (isset($_POST['tombol'])) {
                         </table>
                     </div>
                 </div>
+
+                <!-- PEMAKAIAN SENDIRI (khusus warga login) -->
+                <?php if ($page === 'pemakaian_sendiri'): ?>
+                <div class="card mb-4 shadow-sm" style="border-top: 4px solid #4e73df; border-radius: 0.5rem;">
+                    <div class="card-header py-3 d-flex align-items-center gap-2" style="background: linear-gradient(135deg, #f8f9ff 0%, #eaecf4 100%);">
+                        <div style="background:#4e73df;width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;">
+                            <i class="fas fa-tint text-white"></i>
+                        </div>
+                        <div>
+                            <h6 class="m-0 fw-bold text-primary">Data Pemakaian dan Pembayaran</h6>
+                            <small class="text-muted">Riwayat pemakaian air dan tagihan Anda</small>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <table id="pemakaian_sendiri_table" class="table table-bordered table-hover table-striped w-100">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Waktu Pencatatan Meter</th>
+                                    <th>Kode Tarif</th>
+                                    <th>Meter Awal (m³)</th>
+                                    <th>Meter Akhir (m³)</th>
+                                    <th>Pemakaian (m³)</th>
+                                    <th>Tagihan (Rp)</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php
+                                $q_ps = mysqli_prepare($koneksi, "
+                                    SELECT p.*, t.id_tarif
+                                    FROM pemakaian p
+                                    LEFT JOIN tarif t ON p.kd_tarif = t.id_tarif
+                                    WHERE p.username = ?
+                                    ORDER BY p.tgl DESC, p.waktu DESC
+                                ");
+                                mysqli_stmt_bind_param($q_ps, "s", $username_session);
+                                mysqli_stmt_execute($q_ps);
+                                $res_ps = mysqli_stmt_get_result($q_ps);
+                                if (mysqli_num_rows($res_ps) == 0):
+                                ?>
+                                    <tr><td colspan="7" class="text-center text-muted py-4">Belum ada data pemakaian.</td></tr>
+                                <?php else: while ($dps = mysqli_fetch_assoc($res_ps)):
+                                    $tgl_ps    = $dps['tgl'] ? date('d-m-Y', strtotime($dps['tgl'])) : '-';
+                                    preg_match('/\d{2}:\d{2}(:\d{2})?/', $dps['waktu'] ?? '', $wm_ps);
+                                    $waktu_ps  = $wm_ps[0] ?? '-';
+                                    $kd_tarif_ps = htmlspecialchars($dps['kd_tarif'] ?? $dps['id_tarif'] ?? '-');
+                                    $tagihan_ps  = number_format($dps['tagihan'] ?? 0, 0, ',', '');
+                                    $status_ps   = $dps['status'] ?? 'BELUM BAYAR';
+                                    $badge_ps    = ($status_ps === 'LUNAS') ? 'success' : 'danger';
+                                    $label_ps    = ($status_ps === 'LUNAS') ? 'LUNAS' : 'BLM LUNAS';
+                                ?>
+                                <tr>
+                                    <td><?php echo "$tgl_ps $waktu_ps"; ?></td>
+                                    <td><?php echo $kd_tarif_ps; ?></td>
+                                    <td><?php echo $dps['meter_awal']; ?></td>
+                                    <td><?php echo $dps['meter_akhir']; ?></td>
+                                    <td><?php echo $dps['pemakaian']; ?></td>
+                                    <td><?php echo $tagihan_ps; ?></td>
+                                    <td><span class="badge bg-<?php echo $badge_ps; ?> px-3 py-2"><?php echo $label_ps; ?></span></td>
+                                </tr>
+                                <?php endwhile; endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <?php endif; ?>
 
             </div>
         </main>
@@ -1380,6 +1516,24 @@ if (isset($_POST['tombol'])) {
 <script>
 $(document).ready(function() {
 
+    // ─── Init DataTable Pemakaian Sendiri (warga) ───────────────
+    if (document.getElementById('pemakaian_sendiri_table')) {
+        $('#pemakaian_sendiri_table').DataTable({
+            language: {
+                search:     "Search...",
+                lengthMenu: "_MENU_ entries per page",
+                info:       "Showing _START_ to _END_ of _TOTAL_ entries",
+                infoEmpty:  "Showing 0 entries",
+                emptyTable: "Belum ada data pemakaian",
+                zeroRecords:"Tidak ada data yang cocok",
+                paginate: { previous: "&laquo;", next: "&raquo;" }
+            },
+            pageLength: 10,
+            order: [[0, 'desc']],
+            columnDefs: [{ orderable: false, targets: [6] }]
+        });
+    }
+
     // ─── Init DataTable Tarif ────────────────────────────────────
     $('#tarif_table').DataTable({
         language: {
@@ -1421,6 +1575,13 @@ $(document).ready(function() {
 
     // ─── Tombol + Meter toggle form catat meter ──────────────────
     $('#btn_tambah_meter').click(function() {
+        $('#catat_meter_add').slideToggle();
+        $('html, body').animate({ scrollTop: $('#catat_meter_add').offset().top - 80 }, 400);
+    });
+
+    // ─── Tombol + Meter di pemakaian_warga (admin) ───────────────
+    $('#btn_tambah_meter_pw').click(function() {
+        $('input[name="dari"]').val('pemakaian_warga');
         $('#catat_meter_add').slideToggle();
         $('html, body').animate({ scrollTop: $('#catat_meter_add').offset().top - 80 }, 400);
     });
