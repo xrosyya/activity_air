@@ -27,5 +27,23 @@ class klas_air
         $d = mysqli_fetch_row($result);
         return $d;
     }
+
+    function bln($no)
+    {
+        if ($no == 1) $bln = "Januari";
+        elseif ($no == 2) $bln = "Februari";    
+        elseif ($no == 3) $bln = "Maret"; 
+        elseif ($no == 4) $bln = "April"; 
+        elseif ($no == 5) $bln = "Mei"; 
+        elseif ($no == 6) $bln = "Juni"; 
+        elseif ($no == 7) $bln = "Juli"; 
+        elseif ($no == 8) $bln = "Agustus"; 
+        elseif ($no == 9) $bln = "September"; 
+        elseif ($no == 10) $bln = "Oktober"; 
+        elseif ($no == 11) $bln = "November"; 
+        else
+            $bln = "Desember";
+        return $bln;
+    }   
 }
 ?>
